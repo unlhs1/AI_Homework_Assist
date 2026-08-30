@@ -1348,7 +1348,7 @@ var SYSTEM_PROMPT = [
   '- 动态读数：dXY=Distance(X,Y) 等距离对象 + Text(If(IsDefined(dXY), "dXY = " + dXY, "初始提示语"), 坐标) 形式的提示文字。提示必须是 Text(...) 对象（裸 If 表达式不会显示），必须用 If(IsDefined(...)) 保护初始退化态（动点在路径端点时相关对象未定义）；不要用 Round 参与字符串拼接（实测拼接会变空串）。',
   '- 结论判断容差 0.05（如 |dXY-dUW|<0.05 即成立）。坐标比例已在页面层修正（1:1），无需在命令里处理。',
   '',
-  '【最终输出——讲题，不是 JSON】最终轮输出的是**直接给学生看的教学讲解正文**，用 Markdown：分段小标题（###）、要点（- ）、KaTeX 公式（行内 $...$、块级 $$...$$）、自然段——把「审题（含隐含条件从哪来）→ 解题思路 → 每一步推导（引用草稿纸 student_calc/student_solve 的精确结果与画布 ggb_query 读数的验证）→ 验证说明 → 结论」完整讲清楚，是能照着讲给学生的讲题稿。讲解**末尾**可附一个可选 ```json 附注块（没有额外数据可以不附）：{ "answer":"一句话结论", "conditionSource":"每个条件的出处说明（引用题干原文片段+位置；隐含前提注明\"由结论反推\"）", "figureNote":"图形结构描述", "ggb":{"view":{"xmin":..,"xmax":..,"ymin":..,"ymax":..},"note":"演示提示（如：拖动 F 观察…）"} }——**不要写 ggb.commands/readouts**（画布已被你本轮的工具调用真实构造，无需重演）。正文绝不允许是裸 JSON 或 JSON 包裹讲解。',
+  '【最终输出——讲题，不是 JSON】最终轮输出的是**直接给学生看的教学讲解正文**，用 Markdown：分段小标题（###）、要点（- ）、KaTeX 公式（行内 $...$、块级 $$...$$）、自然段——把「审题（含隐含条件从哪来）→ 解题思路 → 每一步推导（引用草稿纸 student_calc/student_solve 的精确结果与画布 ggb_query 读数的验证）→ 验证说明 → 结论」完整讲清楚，是能照着讲给学生的讲题稿。讲解**末尾**可附一个可选 ```json 附注块（没有额外数据可以不附）：{ "answer":"一句话结论", "conditionSource":"每个条件的出处说明（引用题干原文片段+位置；隐含前提注明\"由结论反推\"）", "figureNote":"图形结构描述", "ggb":{"commands":["A=(0,0)", ...实际成功执行的构造命令(可拖点/联动链/Text 全含)，供画布 JSON 恢复...],"view":{"xmin":..,"xmax":..,"ymin":..,"ymax":..},"note":"演示提示（如：拖动 F 观察…）"} }——**ggb.commands 建议给出**（页面用它在拖动后一键恢复画布；你的实际构造命令从执行历史誊抄即可，含 Point(路径) 可拖式与 Text 读数命令）；正文绝不允许是裸 JSON 或 JSON 包裹讲解。',
   '',
   '【强制流程（务必遵守）】每一轮请求都必须实际调用工具：要么 ggb_eval 构造/补构造，要么 ggb_query 验证/核对；构造与查询要搭配（一轮里至少 1 条 ggb_query，除非画布还没东西可查）。如果某一轮结束没有任何工具调用且还没输出最终讲解正文，下一轮必须继续调用工具，不许跳过工具直接结束，更不许空转长篇推理。工具参数必须完整：ggb_eval 必须带 command（如 {"command":"A=(0,4)"}），ggb_query 必须带 names（如 {"names":"A,B,dAB","mode":"value"}）。',
   '【节奏控制】思考块要短而准，把推导交给画布验证：每轮工具调用建议 3-8 条（含至少 1 条 ggb_query）；一轮里已执行 ≥1 条工具调用就继续下一轮。最终讲解里的每一步推导都要有依据：草稿纸 student_calc/student_solve 的精确结果、ggb_query 的真实读数（结论量如 |dXY-dUW|<0.05 成立要有最后一次 ggb_query 读数支撑）。',
@@ -2607,6 +2607,11 @@ var toolRound = 0;
   // 最终回答：讲解正文（Markdown + KaTeX 渲染）为主交付物；JSON 降级为可选附注（answer/view/note），不再强制重放 commands
   var text0 = (finalRes && finalRes.content) || '';
   var json = safeExtractJSON(text0);
+  // JSON 恢复源：最终附注块若带 ggb.commands → 作为一键还原的权威构造记录（无则用工具执行记录兜底）
+  if (json && json.ggb && Array.isArray(json.ggb.commands) && json.ggb.commands.length) {
+    constructLog = json.ggb.commands.slice();
+    updateRebuildBtn();
+  }
   var bodyText = stripFencedJson(text0);
   if (bodyText.trim().length >= 40) {
     // 讲解正文直接渲染（Markdown + KaTeX）；JSON 附注仅提取 view/note/answer 应用展示
