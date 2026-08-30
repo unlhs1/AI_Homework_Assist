@@ -2831,10 +2831,11 @@ function setView(api, view) {
     if (view && typeof view.xmin === 'number') xmin = view.xmin;
     if (view && typeof view.xmax === 'number') xmax = view.xmax;
     if (view && typeof view.ymin === 'number' && typeof view.ymax === 'number') { ymid = (view.ymin + view.ymax) / 2; }
+    // ⚠️ 1:1 铁律（圆必须还是圆）：Y 跨度永远由容器宽高比从 X 跨度推出，
+    // 绝不采用模型 view 里的 ymin/ymax 跨度（其比例与画布容器不匹配 → 圆变椭圆；Text 不随坐标缩放故"文字不受影响"）。
     var spanX = xmax - xmin;
     var spanY = spanX * h / w;
     var y0 = ymid - spanY / 2, y1 = ymid + spanY / 2;
-    if (view && typeof view.ymin === 'number' && typeof view.ymax === 'number') { y0 = view.ymin; y1 = view.ymax; }
     api.setCoordSystem(xmin, xmax, y0, y1);
   } catch (e) {}
 }
