@@ -1,0 +1,15 @@
+# 调试日志
+*.log
+
+# 构建产物 / 依赖
+geoboard-vite/dist/
+geoboard-vite/node_modules/
+node_modules/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 本地私有（API 配置等）
+*.local
+.env

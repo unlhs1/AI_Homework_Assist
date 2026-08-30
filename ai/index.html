@@ -1,0 +1,3037 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI 聊天工作台 · ReAct 工具循环 + GeoGebra 画布</title>
+<link rel="stylesheet" href="../lib/katex/katex.min.css" />
+<style>
+:root {
+  --bg:#f4f5f9; --panel:#ffffff; --ink:#1f2430; --sub:#6b7280;
+  --accent:#2a6fdb; --accent2:#4a9cf0; --ok:#0e9f6e; --bad:#d63c3c;
+  --border:#e3e6ee; --sysbg:#eef0f5; --thinkbg:#f6f7fb; --thinkborder:#dfe3ec;
+  --toolbg:#f0f4fc; --toolborder:#c9d8f2; --hl:#fff7e0; --warn:#b45309;
+  --shadow:0 8px 28px rgba(20,40,90,.14);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html,body { height:100%; }
+body { font-family:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif; background:var(--bg); color:var(--ink); display:flex; flex-direction:column; }
+header { background:linear-gradient(90deg,#2a6fdb,#4a9cf0); color:#fff; padding:10px 18px; display:flex; align-items:center; gap:12px; flex:0 0 auto; }
+header h1 { font-size:16px; font-weight:600; white-space:nowrap; }
+header .sub { font-size:12px; opacity:.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+header .spacer { flex:1; }
+.hd-btn { background:rgba(255,255,255,.16); color:#fff; border:1px solid rgba(255,255,255,.35); border-radius:8px; padding:6px 11px; font-size:12.5px; cursor:pointer; font-weight:600; white-space:nowrap; }
+.hd-btn:hover { background:rgba(255,255,255,.28); }
+.badge { display:inline-block; font-size:10.5px; padding:2px 8px; border-radius:12px; background:rgba(255,255,255,.22); margin-left:6px; vertical-align:middle; }
+main { flex:1; display:grid; grid-template-columns:minmax(430px, 1fr) minmax(500px, 1.2fr); gap:14px; padding:14px 16px; min-height:0; }
+@media (max-width:960px){ main { grid-template-columns:1fr; grid-template-rows:minmax(420px,auto) 1fr; } }
+.panel { background:var(--panel); border:1px solid var(--border); border-radius:12px; min-height:0; display:flex; flex-direction:column; }
+
+/* ── 左侧：聊天面板 ── */
+.chat-head { padding:9px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; font-size:13px; color:var(--accent); font-weight:600; flex:0 0 auto; }
+.chat-head .right { margin-left:auto; color:var(--sub); font-size:11.5px; font-weight:400; }
+#chat-scroll { flex:1; overflow-y:auto; padding:12px 14px; display:flex; flex-direction:column; gap:9px; }
+.msg { max-width:100%; }
+.msg.user { align-self:flex-end; background:#e6eefb; border:1px solid #c8daf5; color:var(--ink); border-radius:12px 12px 3px 12px; padding:8px 12px; font-size:13.5px; line-height:1.6; max-width:88%; }
+.msg.user .m-img { display:block; max-width:220px; max-height:180px; border-radius:6px; margin-bottom:6px; border:1px solid #bcd0ef; }
+.msg.sys { align-self:center; background:var(--sysbg); color:var(--sub); border-radius:14px; padding:5px 13px; font-size:11.5px; line-height:1.5; }
+.msg.sys.err { background:#fdecec; color:var(--bad); }
+.msg.assistant { align-self:stretch; display:flex; flex-direction:column; gap:7px; }
+
+/* 思考块 */
+.think { border:1px solid var(--thinkborder); background:var(--thinkbg); border-radius:10px; overflow:hidden; }
+.think-head { display:flex; align-items:center; gap:6px; padding:6px 10px; font-size:12px; color:#5a6474; cursor:pointer; user-select:none; background:#f1f3f8; }
+.think-head:hover { background:#e9edf6; }
+.think-head .togg { margin-left:auto; color:var(--accent); font-size:11px; }
+.think-body { padding:8px 12px 10px; font-family:Consolas,"Courier New",monospace; font-size:12px; line-height:1.65; color:#39424f; white-space:pre-wrap; word-break:break-word; }
+.think-body:empty { display:none; }
+
+/* 工具调用卡片 */
+.toolcard { border:1px solid var(--toolborder); background:var(--toolbg); border-radius:9px; overflow:hidden; }
+.toolcard .tc-head { display:flex; align-items:center; gap:7px; padding:6px 10px; font-size:12px; }
+.toolcard .tc-head b { color:var(--accent); font-family:Consolas,monospace; font-size:12.5px; }
+.toolcard .tc-status { margin-left:auto; font-size:11px; color:var(--sub); }
+.toolcard .tc-status.run { color:var(--warn); }
+.toolcard .tc-status.ok { color:var(--ok); }
+.toolcard .tc-status.err { color:var(--bad); }
+.toolcard .tc-args { margin:0 10px 8px; padding:6px 9px; background:#fff; border:1px solid var(--toolborder); border-radius:6px; font-family:Consolas,monospace; font-size:11.5px; line-height:1.5; white-space:pre-wrap; word-break:break-all; color:#2a3340; }
+.toolcard .tc-result { margin:0 10px 9px; padding:6px 9px; border-radius:6px; font-size:11.5px; line-height:1.55; word-break:break-all; }
+.toolcard .tc-result.ok { background:#e9f7f1; color:#0c7d55; border:1px solid #b9e6d3; }
+.toolcard .tc-result.err { background:#fdecec; color:var(--bad); border:1px solid #f2c4c4; }
+
+/* 讲题稿（老师口吻讲解，醒目优先） */
+.teaching { background:#eef7ff; border:1px solid #bfd9f2; border-radius:10px; padding:10px 14px; font-size:13.5px; line-height:1.85; }
+.teaching b { color:var(--accent); }
+
+/* 回答块 */
+.answer { border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:13.5px; line-height:1.75; background:#fff; }
+.answer .a-live { white-space:pre-wrap; word-break:break-word; }
+.answer .a-live:empty { display:none; }
+.stem { margin-top:8px; background:var(--hl); border:1px solid #f5e9bf; border-radius:8px; padding:9px 12px; font-size:13.5px; line-height:1.7; }
+.steps { margin:6px 0 0 20px; font-size:13px; line-height:1.8; }
+.steps li { margin-bottom:5px; }
+.answer-box { margin-top:7px; font-size:13.5px; font-weight:600; color:var(--ok); background:#e9f7f1; border:1px solid #b9e6d3; border-radius:8px; padding:7px 12px; }
+.raw-json { display:none; margin-top:8px; font-size:10.5px; background:#f8f9fc; border:1px solid var(--border); border-radius:8px; padding:7px 9px; max-height:150px; overflow:auto; font-family:Consolas,monospace; white-space:pre; }
+.rebuild-btn { margin-top:8px; }
+.math { padding:0 2px; }
+.tip { margin-top:7px; font-size:12px; color:var(--sub); line-height:1.7; }
+.tip b { color:var(--ink); }
+
+/* 底部输入 */
+.input-row { flex:0 0 auto; border-top:1px solid var(--border); padding:9px 12px; display:flex; gap:8px; align-items:center; background:#fff; }
+.input-row input[type=text] { flex:1; padding:8px 11px; border:1px solid var(--border); border-radius:8px; font-size:13px; font-family:inherit; min-width:0; }
+.input-row input[type=text]:focus { outline:2px solid #cfe0fb; border-color:var(--accent); }
+.input-row .hint { font-size:10.5px; color:var(--sub); }
+.chip-upload { flex:0 0 auto; }
+button { padding:7px 13px; border:none; border-radius:8px; font-size:12.5px; cursor:pointer; font-weight:600; transition:filter .15s, opacity .15s; white-space:nowrap; }
+button.primary { background:var(--accent); color:#fff; }
+button.primary:hover { filter:brightness(1.1); }
+button.primary:disabled, button:disabled { opacity:.45; cursor:not-allowed; }
+button.ghostc { background:#eef2f8; color:var(--ink); border:1px solid var(--border); }
+button.ghostc:hover { background:#e2e8f2; }
+button.stopb { background:#fff; color:var(--bad); border:1px solid #f0b9b9; }
+button.stopb:hover { background:#fdf2f2; }
+
+/* ── 右侧：GGB 工具工作台 ── */
+.gg-head { padding:9px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; font-size:13px; color:var(--accent); font-weight:600; }
+.gg-head .sub { margin-left:auto; color:var(--sub); font-size:11px; font-weight:400; }
+.gg-body { flex:1; padding:12px; min-height:0; overflow:auto; }
+#ggb-element { width:100%; height:100%; min-height:480px; border:1px solid #e8ebf2; border-radius:8px; overflow:hidden; }
+.gg-note { margin-top:9px; font-size:11.5px; color:var(--sub); line-height:1.6; display:none; }
+.gg-note b { color:var(--ink); }
+.footer-note { margin-top:6px; font-size:11px; color:var(--sub); }
+.footer-note a { color:var(--accent); }
+
+/* ── 右上角设置抽屉 ── */
+.drawer-overlay { position:fixed; inset:0; background:rgba(15,25,50,.34); opacity:0; pointer-events:none; transition:opacity .18s; z-index:50; }
+.drawer-overlay.open { opacity:1; pointer-events:auto; }
+.drawer { position:fixed; top:0; right:0; bottom:0; width:340px; background:#fff; border-left:1px solid var(--border); box-shadow:var(--shadow); transform:translateX(105%); transition:transform .22s ease; z-index:51; display:flex; flex-direction:column; }
+.drawer.open { transform:translateX(0); }
+.drawer-head { padding:13px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; font-size:14px; font-weight:600; color:var(--accent); }
+.drawer-head .close { margin-left:auto; background:#eef2f8; border:none; border-radius:7px; padding:5px 11px; cursor:pointer; font-size:12px; color:var(--ink); }
+.drawer-body { flex:1; overflow-y:auto; padding:14px 16px; }
+.drawer-body h3 { font-size:12.5px; margin:14px 0 6px; color:var(--sub); }
+.drawer-body h3:first-child { margin-top:0; }
+.drawer-body select, .drawer-body input { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:7px; font-size:13px; font-family:inherit; background:#fff; color:var(--ink); margin-bottom:8px; }
+.drawer-body label { display:block; font-size:11.5px; color:var(--sub); margin:6px 0 3px; }
+.row2 { display:flex; gap:8px; }
+.row2 > * { flex:1; }
+.drawer-body .hint { font-size:11px; color:var(--sub); line-height:1.6; background:#f7f8fb; border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:8px; }
+.drawer-body .hint b { color:var(--ink); }
+#api-test-result { font-size:11.5px; border-radius:7px; padding:7px 10px; margin-top:8px; line-height:1.55; display:none; word-break:break-all; }
+#api-test-result.ok { background:#e9f7f1; color:#0c7d55; border:1px solid #b9e6d3; }
+#api-test-result.err { background:#fdecec; color:var(--bad); border:1px solid #f2c4c4; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AI 聊天工作台 <span class="badge">ReAct 工具循环</span></h1>
+  <span class="sub">上传题目图 → LLM 流式思考并调用 ggb_eval / ggb_query 在工作台边构造边验证 → 输出 JSON 生成交互演示</span>
+  <span class="spacer"></span>
+  <button class="hd-btn" id="btn-demo">载入内置演示</button>
+  <button class="hd-btn" id="btn-gear">⚙ 设置</button>
+</header>
+
+<main>
+  <!-- 左：聊天流 -->
+  <section class="panel">
+    <div class="chat-head">
+      <span>💬 解答会话</span>
+      <span class="right" id="scratch-badge">📓 草稿 0 步</span>
+      <span class="right">思考块可折叠 · 工具卡片实时显示 · 回答含 KaTeX</span>
+      <button class="ghostc" id="btn-clear" style="padding:4px 9px;font-size:11px">清空</button>
+    </div>
+    <div id="chat-scroll"></div>
+    <div class="input-row">
+      <button class="ghostc" id="btn-upload" title="上传题目图片（本地压缩，不离开浏览器）">🖼 传图</button>
+      <input type="file" id="file-input" accept="image/*" style="display:none" />
+      <input type="text" id="input-text" placeholder="可输入题目文字（也可只传图不输入，直接按图中题意解题）…" />
+      <button class="primary" id="btn-send">开始</button>
+      <button class="stopb" id="btn-stop" style="display:none">停止</button>
+    </div>
+    <div class="hint" style="padding:0 13px 8px">推理型模型先输出思考链（1-2 分钟正常），随后自动调用工具在右侧画布构造并验证，最后输出 JSON。</div>
+  </section>
+
+  <!-- 右：GeoGebra 工具工作台 -->
+  <section class="panel">
+    <div class="gg-head">
+      <span>📐 GeoGebra 工具工作台</span>
+      <span class="sub">工具调用（ggb_eval / ggb_query）直接作用于本画布</span>
+    </div>
+    <div class="gg-body">
+      <div id="ggb-element"></div>
+      <div class="gg-note" id="ggb-note"></div>
+      <div class="footer-note">由 <a href="https://www.geogebra.org" target="_blank" rel="noopener">GeoGebra</a> 开源内核嵌入（webSimple，deployggb.js）。KaTeX 公式渲染为本地副本。</div>
+    </div>
+  </section>
+</main>
+
+<!-- 设置抽屉 -->
+<div class="drawer-overlay" id="drawer-overlay"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    ⚙ API 设置
+    <button class="close" id="btn-drawer-close">✕ 关闭</button>
+  </div>
+  <div class="drawer-body">
+    <div class="hint">协议/端点/Key/模型可自定义（OpenAI 兼容或 DashScope compatible-mode）。默认预设 DeepSeek 多模态 <b>deepseek-v4-flash-vision-exp</b>（识图首选，已实测浏览器直连 + 流式 + 工具调用）。配置自动保存在本机浏览器。</div>
+    <h3>预设</h3>
+    <div class="row2">
+      <select id="preset">
+        <option value="deepseek">DeepSeek（多模态视觉，默认）</option>
+        <option value="dashscope">阿里云 DashScope（qwen VL）</option>
+        <option value="openai">OpenAI</option>
+        <option value="custom">自定义</option>
+      </select>
+      <button class="ghostc" id="btn-load-preset">载入</button>
+    </div>
+    <h3>协议 / 端点</h3>
+    <select id="protocol">
+      <option value="openai">OpenAI 兼容 /chat/completions</option>
+      <option value="dashscope">DashScope compatible-mode</option>
+    </select>
+    <label>Base URL（含 /v1 前缀）</label>
+    <input type="text" id="baseurl" placeholder="https://api.deepseek.com/v1" />
+    <label>API Key</label>
+    <input type="password" id="apikey" placeholder="sk-..." />
+    <label>模型名</label>
+    <input type="text" id="model" placeholder="deepseek-v4-flash-vision-exp" />
+    <h3>学段定性（分类 Agent，推荐轻量非推理模型）</h3>
+    <div class="hint">专门给「题目是哪个学段」定性用，推荐百炼 qwen 轻量模型（秒级返回）。留空 = 用上方主配置；主配置是 DeepSeek 推理模型时定性会很慢。</div>
+    <label>Base URL（留空用上方主配置）</label>
+    <input type="text" id="stage-baseurl" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" />
+    <label>API Key（留空用上方主配置）</label>
+    <input type="password" id="stage-apikey" placeholder="sk-..." />
+    <label>模型名</label>
+    <input type="text" id="stage-model" placeholder="qwen3.5-omni-plus-2026-03-15" />
+    <h3>🧠 思考强度（推理预算）</h3>
+    <div class="hint">以模型 API 层参数控制推理深度（<b>reasoning_effort</b>：low/medium/high，百炼 qwen 还有 <b>enable_thinking</b> 可关思考），同时配 max_tokens 预算与提示词。off=快速行动（百炼模型可关闭思考）；low=轻度；high=深度（默认）；max=极致（充分推演+多方案）。任何档位代数计算仍走草稿纸，不脑内算。</div>
+    <select id="think-strength">
+      <option value="off">off · 快速行动（思考数句直接调工具）</option>
+      <option value="low">low · 轻度（短思考即行动）</option>
+      <option value="high" selected>high · 深度（较充分推演）</option>
+      <option value="max">max · 极致（充分推演+多方案，耗时较长）</option>
+    </select>
+    <h3>📚 上下文长度（token 预算，默认 1M）</h3>
+    <div class="hint">对话历史累积超出预算时自动裁剪**最旧的完整轮次**（保留 system + 最新轮），防止请求超长。默认 1M 基本永不触发，历史完整保留。</div>
+    <input type="text" id="ctx-budget" value="1000000" placeholder="1000000" />
+    <h3>JSON 输出强制</h3>
+    <select id="jsonmode">
+      <option value="json">最终回答请求 json_object 强制（推荐）</option>
+      <option value="text">仅提示词约束（兼容性优先）</option>
+    </select>
+    <button class="primary" id="btn-test-api">测试连接</button>
+    <div id="api-test-result"></div>
+  </div>
+</aside>
+
+<script src="../lib/katex/katex.min.js"></script>
+<script src="https://www.geogebra.org/apps/deployggb.js"></script>
+<script>
+// ════════════════════════════════════════════════════════════
+// AI 聊天工作台 · ReAct 工具循环（DSH 式交互形态）
+// 左=聊天流（思考块折叠 + 工具调用卡片 + 流式回答 + KaTeX/JSON 结果）
+// 右=GeoGebra 工具工作台；工具由浏览器本地执行（ggb_eval=evalCommand, ggb_query=读数）
+// ════════════════════════════════════════════════════════════
+
+// ── 1. 预设与配置 ────────────────────────────────────────────
+var PRESETS = {
+  deepseek:  { protocol:'openai', baseurl:'https://api.deepseek.com/v1',             model:'deepseek-v4-flash-vision-exp',   jsonmode:'json', note:'DeepSeek 多模态视觉（识图首选，流式+工具已实测）' },
+  dashscope: { protocol:'dashscope', baseurl:'https://dashscope.aliyuncs.com/compatible-mode/v1', model:'qwen3.5-omni-plus-2026-03-15', jsonmode:'json', note:'阿里云 DashScope compatible-mode（备用）' },
+  openai:    { protocol:'openai', baseurl:'https://api.openai.com/v1',               model:'gpt-4o',                          jsonmode:'json', note:'OpenAI 官方' },
+  custom:    { protocol:'openai', baseurl:'',                                        model:'',                                jsonmode:'json', note:'任意兼容端点' }
+};
+var CFG_KEY = 'tutorreel_ai_cfg';
+function saveConfig() {
+  try {
+    localStorage.setItem(CFG_KEY, JSON.stringify(getConfig()));
+  } catch (e) {}
+}
+function loadConfig() {
+  try {
+    var s = localStorage.getItem(CFG_KEY);
+    if (s) return JSON.parse(s);
+  } catch (e) {}
+  return null;
+}
+function applyConfig(c) {
+  if (!c) return;
+  if (c.protocol) document.getElementById('protocol').value = c.protocol;
+  if (c.baseurl !== undefined) document.getElementById('baseurl').value = c.baseurl;
+  if (c.apikey !== undefined) document.getElementById('apikey').value = c.apikey;
+  if (c.model) document.getElementById('model').value = c.model;
+  if (c.jsonmode) document.getElementById('jsonmode').value = c.jsonmode;
+}
+function loadPreset(id) {
+  var p = PRESETS[id] || PRESETS.custom;
+  document.getElementById('protocol').value = p.protocol;
+  document.getElementById('baseurl').value = p.baseurl;
+  document.getElementById('model').value = p.model;
+  document.getElementById('jsonmode').value = p.jsonmode;
+}
+function getConfig() {
+  return {
+    protocol: document.getElementById('protocol').value,
+    baseurl: document.getElementById('baseurl').value.trim(),
+    apikey: document.getElementById('apikey').value.trim(),
+    model: document.getElementById('model').value.trim(),
+    jsonmode: document.getElementById('jsonmode').value
+  };
+}
+function buildRequestUrl(cfg) {
+  var base = cfg.baseurl.replace(/\/+$/, '');
+  if (cfg.protocol === 'dashscope') {
+    return /compatible-mode/.test(base) ? base + '/chat/completions' : base + '/compatible-mode/v1/chat/completions';
+  }
+  return base + '/chat/completions';
+}
+// —— 学段定性专用通道（轻量模型；留空=跟随主配置）——
+function loadStageCfg() {
+  try {
+    var s = localStorage.getItem('tutorreel_stage_cfg');
+    if (s) return JSON.parse(s);
+  } catch (e) {}
+  return null;
+}
+function saveStageCfg() {
+  try {
+    localStorage.setItem('tutorreel_stage_cfg', JSON.stringify({
+      baseurl: document.getElementById('stage-baseurl').value.trim(),
+      apikey: document.getElementById('stage-apikey').value.trim(),
+      model: document.getElementById('stage-model').value.trim()
+    }));
+  } catch (e) {}
+}
+(function initCfg() {
+  var saved = loadConfig();
+  if (saved) applyConfig(saved);
+  else loadPreset('deepseek');
+  // 预填学段定性通道默认值（百炼轻量；key 留空用主配置）
+  var sc = loadStageCfg();
+  if (!sc) {
+    document.getElementById('stage-baseurl').value = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+    document.getElementById('stage-model').value = 'qwen3.5-omni-plus-2026-03-15';
+  } else {
+    if (sc.baseurl !== undefined) document.getElementById('stage-baseurl').value = sc.baseurl;
+    if (sc.apikey !== undefined) document.getElementById('stage-apikey').value = sc.apikey;
+    if (sc.model !== undefined) document.getElementById('stage-model').value = sc.model;
+  }
+})();
+
+// ── 2. 图片上传（压缩到 ~1400px JPEG，不离开浏览器）─────────
+var currentImage = null; // dataURL
+document.getElementById('btn-upload').addEventListener('click', function () { document.getElementById('file-input').click(); });
+document.getElementById('file-input').addEventListener('change', function () {
+  var f = document.getElementById('file-input').files[0];
+  if (!f) return;
+  var rd = new FileReader();
+  rd.onload = function () {
+    var img = new Image();
+    img.onload = function () {
+      var max = 1400;
+      var scale = Math.min(1, max / Math.max(img.width, img.height));
+      var c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      currentImage = c.toDataURL('image/jpeg', 0.88);
+      addSys('🖼 已载入题目图（' + img.width + '×' + img.height + ' → ' + c.width + '×' + c.height + '，压缩后内嵌进请求）');
+    };
+    img.src = rd.result;
+  };
+  rd.readAsDataURL(f);
+});
+
+// ── 3. 工具定义（GGB 本地执行）────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// 学生草稿纸引擎（Student Calc）· 纯 JS 无依赖 · 模拟学生手算
+//   · 一切结果保持"手写可表达"精确形式：分数 / √k（开不尽保留 √5）/ π / 字母幂
+//   · 禁止：通用角三角函数、反三角函数、对数、无穷小数近似当答案
+//   · 支持：表达式化简（展开/合并/有理化）、代入、一元一次/二次求根公式、
+//           多元线性方程组（高斯消元）、可消元方程组、韦达对称型
+// ══════════════════════════════════════════════════════════════
+(function (global) {
+  'use strict';
+
+  // ---------- 有理数（BigInt 分数） ----------
+  function gcbig(a, b) { a = a < 0n ? -a : a; b = b < 0n ? -b : b; while (b) { var t = a % b; a = b; b = t; } return a; }
+  function fr(n, d) {
+    if (d === undefined) d = 1n; if (n === undefined) n = 0n;
+    n = BigInt(n); d = BigInt(d);
+    if (d < 0n) { n = -n; d = -d; }
+    if (n === 0n) return { n: 0n, d: 1n };
+    var g = gcbig(n, d);
+    return { n: n / g, d: d / g };
+  }
+  function frAdd(a, b) { return fr(a.n * b.d + b.n * a.d, a.d * b.d); }
+  function frSub(a, b) { return fr(a.n * b.d - b.n * a.d, a.d * b.d); }
+  function frMul(a, b) { return fr(a.n * b.n, a.d * b.d); }
+  function frDiv(a, b) { if (b.n === 0n) throw new Error('除以 0'); return fr(a.n * b.d, a.d * b.n); }
+  function frNeg(a) { return fr(-a.n, a.d); }
+  function frAbs(a) { return fr(a.n < 0n ? -a.n : a.n, a.d); }
+  function frIsZero(a) { return a.n === 0n; }
+  function frStr(a) { return a.d === 1n ? a.n.toString() : (a.n.toString() + '/' + a.d.toString()); }
+
+  // ---------- 数域项 ----------
+  // Term = { c:分数, s:根号内被开方数(已无平方因子,1=无), p:π幂, v:{name:int 幂(可负=分母)} }
+  function T(c, s, p, v) { return { c: c, s: s || 1, p: p || 0, v: v || {} }; }
+  function vCopy(v) { var o = {}; Object.keys(v).forEach(function (k) { o[k] = v[k]; }); return o; }
+  function vMul(a, b) {
+    var o = vCopy(a);
+    Object.keys(b).forEach(function (k) { o[k] = (o[k] || 0) + b[k]; });
+    var out = {};
+    Object.keys(o).forEach(function (k) { if (o[k] !== 0) out[k] = o[k]; });
+    return out;
+  }
+  function vKey(v) {
+    return Object.keys(v).sort().map(function (k) { return k + '^' + v[k]; }).join(',');
+  }
+  // 分解根号内 k：提出所有平方因子
+  function sqfy(k) {
+    var out = 1, rest = 1, x = k;
+    for (var p = 2; p * p <= x; p++) {
+      var e = 0;
+      while (x % p === 0) { x = (x / p) | 0; e++; }
+      for (var i = 0; i < (e >> 1); i++) out *= p;
+      if (e % 2 === 1) rest *= p;
+    }
+    if (x > 1) rest *= x;
+    return { c: fr(out), s: rest };
+  }
+  function mulS(k1, k2) { return sqfy(k1 * k2); }
+  function tKey(t) { return (t.s || 1) + '|' + (t.p || 0) + '|' + vKey(t.v); }
+  function tMul(a, b) {
+    var s = mulS(a.s, b.s);
+    return T(frMul(a.c, frMul1(s.c, b.c)), s.s, a.p + b.p, vMul(a.v, b.v));
+  }
+  function frMul1(a, b) { return frMul(a, b); }
+  function tIsZero(t) { return t.c.n === 0n; }
+
+  // ---------- 表达式 = Term 列表 ----------
+  function E(terms) { return { terms: terms || [] }; }
+  function eIsZero(e) { return e.terms.length === 0 || e.terms.every(tIsZero); }
+  function eConst(n) { return E([T(fr(n), 1, 0, {})]); }
+  function eVar(name, pow) { var v = {}; v[name] = pow === undefined ? 1 : pow; return E([T(fr(1), 1, 0, v)]); }
+  function eConstCoeff(c) { return E([T(c, 1, 0, {})]); }
+  function eNeg(e) { return E(e.terms.map(function (t) { return T(frNeg(t.c), t.s, t.p, vCopy(t.v)); })); }
+  function eAdd(a, b) {
+    var out = a.terms.map(function (t) { return T(t.c, t.s, t.p, vCopy(t.v)); });
+    b.terms.forEach(function (t) {
+      var k = tKey(t), hit = null;
+      for (var i = 0; i < out.length; i++) { if (tKey(out[i]) === k) { hit = out[i]; break; } }
+      if (hit) hit.c = frAdd(hit.c, t.c);
+      else out.push(T(t.c, t.s, t.p, vCopy(t.v)));
+    });
+    return E(out.filter(function (t) { return t.c.n !== 0n; }));
+  }
+  function eSub(a, b) { return eAdd(a, eNeg(b)); }
+  function eMul(a, b) {
+    var res = [];
+    a.terms.forEach(function (ta) {
+      b.terms.forEach(function (tb) {
+        var t = tMul(ta, tb);
+        var k = tKey(t), hit = null;
+        for (var i = 0; i < res.length; i++) { if (tKey(res[i]) === k) { hit = res[i]; break; } }
+        if (hit) hit.c = frAdd(hit.c, t.c);
+        else res.push(t);
+      });
+    });
+    return E(res.filter(function (t) { return t.c.n !== 0n; }));
+  }
+  function eScale(e, c) { return eMul(e, eConstCoeff(c)); }
+  function ePower(e, n) {
+    n = Number(n);
+    if (!Number.isInteger(n) || n < 0 || n > 8) throw new Error('幂次超出学生手算范围（仅支持非负整数幂 ≤ 8）');
+    var out = eConst(1);
+    for (var i = 0; i < n; i++) out = eMul(out, e);
+    return out;
+  }
+
+  // ---------- 除法（学生手算口径） ----------
+  // 分母为"单项式（无根号、无 π、变量幂任意）"或"纯数/根式"→ 可除；
+  // 分母为多项式加法 → 报"通分超范围"
+  function eDiv(a, b) {
+    if (b.terms.length === 0) throw new Error('除以 0');
+    if (b.terms.length === 1) {
+      var d = b.terms[0];
+      if (d.s === 1 && d.p === 0) {
+        // 变量变负幂（若有），系数取倒数
+        var v = {};
+        Object.keys(d.v).forEach(function (k) { v[k] = -d.v[k]; });
+        return eMul(a, E([T(fr(d.c.d, d.c.n), 1, 0, v)])); // 系数 1/d.c
+      }
+      // 1/(c·√k) → (1/c)·√k/k
+      if (d.s !== 1 && d.p === 0 && Object.keys(d.v).length === 0) {
+        var k = d.s;
+        var cInv = fr(d.c.d, d.c.n);
+        var num = eMul(a, E([T(cInv, k, 0, {})]));
+        return eDiv(num, eConst(k));
+      }
+      if (d.p !== 0 && Object.keys(d.v).length === 0 && d.s === 1) {
+        throw new Error('除以π：学生手算不使用π分母，请先用等价变换去掉π');
+      }
+    }
+    // a + b√k 分母 → 乘共轭有理化
+    if (b.terms.length === 2) {
+      var t0 = b.terms[0], t1 = b.terms[1];
+      if (t0.p === 0 && t1.p === 0 && Object.keys(t0.v).length === 0 && Object.keys(t1.v).length === 0) {
+        var conjTerms;
+        if ((t0.s === 1) ^ (t1.s === 1)) {
+          // 一个是纯数、一个有 √k
+          var pure = t0.s === 1 ? t0 : t1;
+          var surd = t0.s === 1 ? t1 : t0;
+          conjTerms = [T(pure.c, 1, 0, {}), T(frNeg(surd.c), surd.s, 0, {})];
+          var conj = E(conjTerms);
+          return eDiv(eMul(a, conj), eMul(b, conj));
+        }
+      }
+    }
+    throw new Error('分母含多项式/复合式，学生手算无法通分——请先用定理/因式分解消去分母');
+  }
+  function frInv(x) { return fr(x.d, x.n); }
+
+  // ---------- 解析器 ----------
+  function mkParser(s) {
+    var i = 0;
+    function sp() { while (i < s.length && /\s/.test(s[i])) i++; }
+    function peek() { sp(); return s[i]; }
+    function isMinus(ch) { return ch === '-' || ch === '−' || ch === '–'; }
+    function readNum() {
+      sp();
+      var neg = false;
+      if (isMinus(s[i])) { neg = true; i++; }
+      var st = i;
+      while (i < s.length && /[0-9.]/.test(s[i])) i++;
+      var raw = s.slice(st, i);
+      var n;
+      if (raw === '') throw new Error('缺少数字');
+      if (raw.indexOf('.') >= 0) {
+        var parts = raw.split('.');
+        n = fr(parts.join(''), '1' + '0'.repeat(parts[1].length));
+      } else n = fr(raw);
+      return neg ? frNeg(n) : n;
+    }
+    function readIdent() {
+      sp(); var st = i;
+      while (i < s.length && /[A-Za-zα-ωΑ-Ω]/.test(s[i])) i++;
+      return s.slice(st, i);
+    }
+    function readSqrtNum() {
+      sp(); var st = i;
+      while (i < s.length && /[0-9.]/.test(s[i])) i++;
+      return fr(s.slice(st, i) || '0');
+    }
+    // √ 被开方数：支持 √3 / √(3) / sqrt(3) / sqrt 3 写法（模型常见 sqrt( 格式；旧引擎把 sqrt 当变量 → 4*sqrt(3) 算成 12sqrt）
+    function readSqrtRadicand() {
+      sp();
+      if (s[i] === '(') {
+        i++;
+        var kv = readSqrtNum();
+        sp();
+        if (s[i] === ')') i++;
+        if (Number(kv.n) === 0 && Number(kv.d) === 1) throw new Error('√ 括号内缺少数字，如 √(3) 或 sqrt(3)');
+        return kv;
+      }
+      var kk = readSqrtNum();
+      if (Number(kk.n) === 0 && Number(kk.d) === 1) throw new Error('√ 后缺少数字，如 √3 或 sqrt(3)');
+      return kk;
+    }
+    function parseAtom() {
+      sp();
+      var ch = peek();
+      if (ch === '(') { i++; var e = parseAdd(); sp(); if (s[i] === ')') i++; return e; }
+      if (isMinus(ch)) { i++; return eNeg(parseAtom()); }
+      if (ch === '+') { i++; return parseAtom(); }
+      if (/[0-9.]/.test(ch || '')) return eConstCoeff(readNum());
+      if (ch === '√') {
+        i++;
+        var k = readSqrtRadicand();
+        var sq = sqfy(Number(k.n) / Number(k.d));
+        return E([T(sq.c, sq.s, 0, {})]);
+      }
+      if (ch === 'π') { i++; return E([T(fr(1), 1, 1, {})]); }
+      var id = readIdent();
+      if (id === 'pi' || id === 'π') return E([T(fr(1), 1, 1, {})]);
+      if (id.toLowerCase() === 'sqrt') {
+        var ks = readSqrtRadicand();
+        var sqs = sqfy(Number(ks.n) / Number(ks.d));
+        return E([T(sqs.c, sqs.s, 0, {})]);
+      }
+      if (id === 'e') throw new Error('自然常数 e：学生手算不可达，请用分数/√k 表达');
+      if (id === 'ln' || id === 'lg' || id === 'log') throw new Error('对数：学生手算不可达（无计算器）');
+      if (id === 'arcsin' || id === 'arccos' || id === 'arctan' || id === 'sin^{-1}' || id === 'sin-1')
+        throw new Error('反三角函数：学生手算不可达，请改用特殊角/定理');
+      if (id === 'sin' || id === 'cos' || id === 'tan' || id === 'cot') {
+        sp(); if (s[i] === '(') { i++; var deg = readNum(); sp(); if (s[i] === ')') i++; return trig(id, deg); }
+        throw new Error('三角函数缺少角度，如 sin(45)');
+      }
+      if (id.length === 0) throw new Error('无法解析：' + s.slice(i, i + 12));
+      // 变量（可带 ^ 幂，幂可负）
+      var p = 1;
+      sp();
+      if (peek() === '^') {
+        i++;
+        var pn = readNum();
+        var pnV = Number(pn.n) / Number(pn.d);
+        if (!Number.isInteger(pnV) || Math.abs(pnV) > 8) throw new Error('幂次超出学生手算范围（整数幂 |p|≤8）');
+        p = pnV;
+      }
+      var v = {}; v[id] = p;
+      return E([T(fr(1), 1, 0, v)]);
+    }
+    function parsePow() {
+      var base = parseAtom();
+      sp();
+      if (peek() === '^') {
+        i++;
+        var ex = parseAtom(); // 指数只支持原子（整数）
+        var exTerms = ex.terms;
+        if (exTerms.length !== 1 || exTerms[0].s !== 1 || exTerms[0].p !== 0 || Object.keys(exTerms[0].v).length !== 0)
+          throw new Error('指数必须是整数');
+        return ePower(base, Number(exTerms[0].c.n) / Number(exTerms[0].c.d));
+      }
+      return base;
+    }
+    function startsAtom() {
+      sp();
+      var ch = s[i];
+      if (ch === undefined) return false;
+      if (/[0-9.(√]/.test(ch)) return true;
+      if (ch === 'π') return true;
+      if (/[A-Za-zα-ωΑ-Ω]/.test(ch)) return true;
+      return false; // '-'/'+' 一律不隐式乘，留给加减法处理（防 1-2a 被误解析为 1×(-2a)）
+    }
+    function parseMul() {
+      var left = parsePow();
+      while (true) {
+        sp();
+        var ch = peek();
+        if (ch === '*' || ch === '×' || ch === '·') { i++; left = eMul(left, parsePow()); }
+        else if (ch === '/') { i++; left = eDiv(left, parsePow()); }
+        else if (ch === '÷') { i++; left = eDiv(left, parsePow()); }
+        else if (startsAtom()) { left = eMul(left, parsePow()); } // 隐式乘法：2x、2(x+1)、(a+b)(c+d)
+        else break;
+      }
+      return left;
+    }
+    function parseAdd() {
+      var left = parseMul();
+      while (true) {
+        sp();
+        var ch = peek();
+        if (ch === '+') { i++; left = eAdd(left, parseMul()); }
+        else if (isMinus(ch)) { i++; left = eSub(left, parseMul()); }
+        else break;
+      }
+      return left;
+    }
+    return { parse: parseAdd, pos: function () { return i; }, str: s };
+  }
+  function trig(fn, deg) {
+    var d = (Number(deg.n) / Number(deg.d)) % 360; if (d < 0) d += 360;
+    var SIN = { 0: '0', 15: '(√6-√2)/4', 30: '1/2', 45: '√2/2', 60: '√3/2', 75: '(√6+√2)/4', 90: '1',
+      105: '(√6+√2)/4', 120: '√3/2', 135: '√2/2', 150: '1/2', 165: '(√6-√2)/4', 180: '0', 210: '-1/2', 225: '-√2/2', 240: '-√3/2', 270: '-1', 300: '-√3/2', 315: '-√2/2', 330: '-1/2', 360: '0' };
+    var TAN = { 0: '0', 30: '√3/3', 45: '1', 60: '√3', 90: undefined, 120: '-√3', 135: '-1', 150: '-√3/3', 180: '0', 210: '√3/3', 225: '1', 240: '√3', 270: undefined, 300: '-√3', 315: '-1', 330: '-√3/3', 360: '0' };
+    function v(s) { return mkParser(String(s)).parse(); }
+    if (fn === 'sin') {
+      if (SIN[String(d)] === undefined) throw new Error('sin' + frStr(deg) + '° 学生手算不可达：通用角无精确表值，请改用特殊角或定理');
+      return v(SIN[String(d)]);
+    }
+    if (fn === 'cos') {
+      // cos(θ)=sin(90−θ)
+      var comp = (90 - d + 360) % 360;
+      if (SIN[String(comp)] === undefined) throw new Error('cos' + frStr(deg) + '° 学生手算不可达：通用角无精确表值');
+      return v(SIN[String(comp)]);
+    }
+    if (fn === 'tan') {
+      if (TAN[String(d)] === undefined) throw new Error('tan' + frStr(deg) + '° 学生手算不可达：通用角无精确表值');
+      return v(TAN[String(d)]);
+    }
+    throw new Error('cot 超出学生手算范围');
+  }
+
+  // ---------- 输出 ----------
+  // termStr 输出"无前导符号"的正项文本（负值用 abs 系数，符号由 exprStr 决定）
+  function termAbsStr(t) {
+    var c = frAbs(t.c);
+    var s = '';
+    if (t.s !== 1) s += '√' + t.s;
+    if (t.p > 0) s += (t.p === 1 ? 'π' : 'π^' + t.p);
+    var pos = [], neg = [];
+    Object.keys(t.v).forEach(function (k) {
+      var p = t.v[k];
+      if (p >= 0) pos.push(p === 1 ? k : k + '^' + p);
+      else neg.push(p === -1 ? k : k + '^' + (-p));
+    });
+    var core = s + pos.join('');
+    var coefStr = frStr(c);
+    if (core === '' && neg.length === 0) return coefStr;
+    var body = core + (neg.length ? '/' + neg.join('·') : '');
+    if (coefStr === '1') return body;
+    if (coefStr === '-1') return body; // 不会发生（abs）
+    // 学生手写习惯：√k 前系数为 1/d 时写作 √k/d（如 1/2·√2 → √2/2）；无根号部分时保持分数系数
+    if (s !== '' && c.n === 1n && neg.length === 0) {
+      return body.split('√')[0] ? body : '√' + t.s + '/' + c.d; // √k/d
+    }
+    return coefStr + body;
+  }
+  function exprStr(e) {
+    if (!e.terms.length) return '0';
+    var terms = e.terms.filter(function (t) { return t.c.n !== 0n; });
+    if (!terms.length) return '0';
+    var out = terms.map(function (t, i) {
+      var s = termAbsStr(t);
+      var neg = t.c.n < 0n;
+      if (i === 0) return (neg ? '−' : '') + s;
+      return (neg ? ' − ' + s : ' + ' + s);
+    }).join('');
+    return out;
+  }
+
+  // 规约：合并同类项 + 去零 + 根式系数融合（(p/q)·√k → 提出平方因子，如 1/2·√2 → √2/2）
+  function eCompact(e) {
+    var map = {};
+    e.terms.forEach(function (t) {
+      if (t.c.n === 0n) return;
+      var k = tKey(t);
+      if (!map[k]) map[k] = T(t.c, t.s, t.p, vCopy(t.v));
+      else map[k].c = frAdd(map[k].c, t.c);
+    });
+    var out = [];
+    Object.keys(map).forEach(function (k) {
+      var t = map[k];
+      if (t.c.n === 0n) return;
+      if (t.s !== 1 && t.p === 0 && Object.keys(t.v).length === 0 && t.c.n !== 0n && t.c.d !== 1n) {
+        // (n/d)·√k → √(n²k)/d → (a/d)·√b（a=完全平方因子根，b=剩余无平方因子）
+        var n2 = Number(t.c.n < 0n ? -t.c.n : t.c.n);
+        var kk = n2 * n2 * t.s;
+        var sq = sqfy(kk);
+        var coefN = BigInt(sq.c.n);                   // a（完全平方开根后的整数，sq.c.d===1）
+        var dqB = t.c.d;
+        var g = gcbig(coefN, dqB);
+        out.push(T(fr(coefN / g, dqB / g), sq.s, t.p, vCopy(t.v)));
+        return;
+      }
+      out.push(t);
+    });
+    out = out.filter(function (t) { return t.c.n !== 0n; });
+    return E(out);
+  }
+
+  // ---------- 表达式解析入口 ----------
+  function parseE(s) {
+    if (typeof s !== 'string' || !s.trim()) throw new Error('空表达式');
+    var p = mkParser(s);
+    var e = p.parse();
+    p.pos(); // 允许尾部空白
+    return e;
+  }
+
+  // ---------- 代入化简 ----------
+  function replaceVar(e, name, sub) {
+    var out = [];
+    e.terms.forEach(function (t) {
+      var p = t.v[name];
+      if (!p) { out.push(T(t.c, t.s, t.p, vCopy(t.v))); return; }
+      // 去掉该变量，乘 sub^p
+      var v = vCopy(t.v); delete v[name];
+      var subP = ePower(sub, Math.abs(p));
+      if (p < 0) subP = eDiv(eConst(1), subP);
+      var unit = E([T(t.c, t.s, t.p, v)]);
+      out = out.concat(eMul(unit, subP).terms);
+    });
+    return eCompact(E(out));
+  }
+
+  // ---------- 一元求根（一次/二次，精确根式公式） ----------
+  // 返回 [exactStr, exactStr2] 或 null（不可达）
+  function powPoly(e, varName) {
+    // 按 var 幂分组 → coef[deg] 是不含 var 的 Expr
+    var by = {};
+    e.terms.forEach(function (t) {
+      var p = t.v[varName] || 0;
+      var v = vCopy(t.v); delete v[varName];
+      var unit = E([T(t.c, t.s, t.p, v)]);
+      by[p] = eAdd(by[p] || E([]), unit);
+    });
+    return by;
+  }
+  function gcdBigInt(a, b) { return gcbig(a, b); }
+  function sqrExpr(e) {
+    // 单项式开方：√(c·√k·π^p·v)，返回近似表达式（精确化：c 提出完全平方因子，v 幂折半）
+    if (e.terms.length !== 1) throw new Error('判别式含多项，√ 无法手算——请改用定理/构造法');
+    var t = e.terms[0];
+    // 系数 √c：c=p/q → √(pq)/q
+    var c = t.c;
+    var absN = c.n < 0n ? -c.n : c.n;
+    var sq = sqfy(Number(absN));
+    var coefOut = sq.c; // 提出整数部分
+    var restN = sq.s; // 根号内剩余
+    // 分母处理：√(p/q)=√(pq)/q
+    // 简化：√(m/q) = √(mq)/q  —— m 余下部分
+    var remNum = restN * Number(c.d);
+    var remDen = c.d;
+    var sRem = sqfy(remNum);
+    coefOut = frMul(coefOut, sRem.c);
+    var sqrtInside = sRem.s;
+    // v 幂折半
+    var v = {};
+    var extra = [];
+    Object.keys(t.v).forEach(function (k) {
+      var p = t.v[k];
+      var kk = p / 2, rr = p % 2;
+      if (p < 0) throw new Error('判别式含负幂变量，不可手算');
+      var ip = Math.floor(p / 2);
+      if (ip >= 1) v[k] = ip;
+      if (p % 2 === 1) {
+        // √(k^1) 保留在根号内：sqrtInside 乘 k？不能（k 是名）—— 输出 √k 分子
+        extra.push(k);
+        v[k] = (v[k] || 0); // 不提出
+      }
+    });
+    // 若 c 是负数 → 判别式为负（无实数解），提示
+    if (c.n < 0n) throw new Error('判别式 < 0：方程无实数解（学生应说明无实根或复数超纲）');
+    var coefE = eConstCoeff(frMul(coefOut, fr(1, remDen))); // 先放着
+    // 组装：coefOut/remDen × √(sqrtInside) × 变量幂 × (extra 在根号内)
+    var parts = [];
+    var base = { c: frMul(coefOut, fr(1, remDen)), s: sqrtInside, p: t.p % 2, v: v };
+    // extra 变量名的推出（奇数幂 → √VAR 作为根号部分附在表达式里）——学生手算可写 √(8a)=2√(2a)？√(k^1)=√k 不可化简，直接保留在根号里需要根号内能表示变量。简化：报错。
+    if (extra.length) throw new Error('判别式含奇数幂变量（如 a^3），学生手算需先提取平方因子后再开方；建议用其他方法');
+    var expr = E([base]);
+    // 若 t.p 为奇数：√π 保留（罕见）
+    if (t.p % 2 === 1) {
+      // π^p → π^( (p-1)/2 ) * √π —— 近似视为不可达
+      throw new Error('判别式含 π 的奇数幂，不可手算');
+    }
+    return expr;
+  }
+  function solveUnary(expr, varName) {
+    // 去 varName 幂最高到 2
+    var by = powPoly(expr, varName);
+    var degs = Object.keys(by);
+    if (degs.length === 0) return { ok: true, solutions: ['恒等式（任意该变量均可）'] };
+    var maxDeg = Math.max.apply(null, degs.map(Number));
+    if (maxDeg > 2) return { ok: false, error: '方程次数>2，超出学生手算范围（仅支持一次/二次求根公式）' };
+    var a2 = by['2'] || E([]), a1 = by['1'] || E([]), a0 = by['0'] || E([]);
+    if (eIsZero(a2)) {
+      if (eIsZero(a1)) return { ok: true, solutions: ['恒等式（任意）'] };
+      // x = −a0/a1，尽力精确化（含分数越约）：数值单分母时直接除
+      var numL = eNeg(a0), denL = a1;
+      if (denL.terms.length === 1 && Object.keys(denL.terms[0].v).length === 0 && denL.terms[0].s === 1 && denL.terms[0].p === 0) {
+        var df = denL.terms[0].c;
+        var x = eScale(numL, fr(df.d, df.n));
+        x = eCompact(x);
+        var xs = exprStr(x).replace(/\u2212/g, '-');
+        return { ok: true, solutions: [xs], varName: varName };
+      }
+      return { ok: true, solutions: ['(' + exprStr(numL).replace(/\u2212/g, '-') + ')/(' + exprStr(denL).replace(/\u2212/g, '-') + ')'], varName: varName };
+    }
+    // 二次：x = (−b ± √(b²−4ac)) / (2a)
+    var b = a1, c = a0, a = a2;
+    var D = eSub(eMul(b, b), eMul(eConstCoeff(fr(4)), eMul(a, c)));
+    var root;
+    try { root = sqrExpr(D); }
+    catch (err) { return { ok: false, error: String(err.message || err) }; }
+    var num1 = eAdd(eNeg(b), root);
+    var num2 = eSub(eNeg(b), root);
+    var den = eScale(a, fr(2));
+    // 学生手写约分：分子/分母提公因式后输出；分母为单项式时把 (k·m)/(k·n) 约成最简
+    function fmtFrac(n, d) {
+      var ns = exprStr(n).replace(/\u2212/g, '-');
+      var ds = exprStr(d).replace(/\u2212/g, '-');
+      var nE = eCompact(n), dE = eCompact(d);
+      // 简单情况：分母是纯数字/单项式，分子每项的系数与分母有理数部分约分
+      if (dE.terms.length === 1 && Object.keys(dE.terms[0].v).length === 0 && dE.terms[0].s === 1 && dE.terms[0].p === 0) {
+        var df = dE.terms[0].c;
+        var g = df.n !== 0n ? gcbig(df.n, df.d) : 1n;
+        var numOut = nE.terms.map(function (t) {
+          // 求 t.c 与 df 的 gcd（有理数取交叉 gcd）
+          var g1 = gcbig(t.c.n, df.n), g2 = gcbig(t.c.d, df.d);
+          var coef = fr(t.c.n / g1, t.c.d / g2);
+          var dfNew = fr(df.n / g1, df.d / g2);
+          return { c: coef, dfNew: dfNew };
+        });
+        if (numOut.length && numOut.every(function (x) { return frStr(x.dfNew) === frStr(numOut[0].dfNew); }) && frStr(numOut[0].dfNew) === '1') {
+          var e2 = E(numOut.map(function (x) { return T(x.c, nE.terms[numOut.indexOf(x)].s, nE.terms[numOut.indexOf(x)].p, vCopy(nE.terms[numOut.indexOf(x)].v)); }));
+          return exprStr(eCompact(e2)).replace(/\u2212/g, '-');
+        }
+      }
+      return '(' + ns + ')/(' + ds + ')';
+    }
+    return { ok: true, solutions: [fmtFrac(num1, den), fmtFrac(num2, den)], varName: varName };
+  }
+
+  // ---------- 方程组 ----------
+  // eqs: ["x+y=2","x-y=0"] 或 ["x+y-2","x-y"]（=0 隐含）
+  // vars: ["x","y"]
+  // 1) 尝试线性化 + 高斯消元；2) 否则尝试从某方程解出某变量代入消元；3) 韦达对称型
+  function parseEq(raw) {
+    var s = String(raw).replace(/\s+/g, '');
+    var eq = s.split('=');
+    var lhs, rhs;
+    if (eq.length === 2) { lhs = parseE(eq[0]); rhs = parseE(eq[1]); }
+    else if (eq.length > 2) throw new Error('等式出现多个 =');
+    else { lhs = parseE(s); rhs = E([]); }
+    return eSub(lhs, rhs);
+  }
+  function isLinearOn(e, varName) {
+    var ok = true;
+    e.terms.forEach(function (t) {
+      var p = t.v[varName] || 0;
+      if (p > 1) ok = false;
+      // var×var 乘积（v 中至少两个 ≥1）→ 非线性
+      var npos = 0;
+      Object.keys(t.v).forEach(function (k) { if (t.v[k] > 0) npos++; });
+      if (npos > 1) ok = false;
+      if (Object.keys(t.v).some(function (k) { return t.v[k] < 0; })) ok = false;
+    });
+    return ok;
+  }
+  function solveLinearSystem(eqs, vars) {
+    // coeff matrix: 各项为分数（线性 ⇒ 每项一个变量幂 =1）
+    var n = vars.length, m = eqs.length;
+    var M = [];
+    for (var r = 0; r < m; r++) {
+      var row = [];
+      for (var c = 0; c < n; c++) row.push(fr(0));
+      var constT = fr(0);
+      eqs[r].terms.forEach(function (t) {
+        var hit = -1;
+        for (var c2 = 0; c2 < n; c2++) { if ((t.v[vars[c2]] || 0) === 1) { hit = c2; break; } }
+        if (hit >= 0) row[hit] = frAdd(row[hit], t.c);
+        else constT = frAdd(constT, t.c); // 常数项(c 不含变量) → 移到右边
+      });
+      row.push(frNeg(constT)); // 增广列： rhs = -const
+      M.push(row);
+    }
+    // 高斯消元（分数精确）
+    var pivot = [];
+    var row = 0;
+    for (var col = 0; col < n && row < m; col++) {
+      var pr = -1;
+      for (var rr = row; rr < m; rr++) if (M[rr][col].n !== 0n) { pr = rr; break; }
+      if (pr < 0) continue;
+      var tmp = M[row]; M[row] = M[pr]; M[pr] = tmp;
+      var piv = M[row][col];
+      for (var c3 = 0; c3 <= n; c3++) M[row][c3] = frDiv(M[row][c3], piv);
+      for (var r2 = 0; r2 < m; r2++) {
+        if (r2 === row || M[r2][col].n === 0n) continue;
+        var f = M[r2][col];
+        for (var c4 = 0; c4 <= n; c4++) M[r2][c4] = frSub(M[r2][c4], frMul(f, M[row][c4]));
+      }
+      pivot.push(col);
+      row++;
+    }
+    if (pivot.length < n) return { ok: false, error: '方程组不满秩/有无穷多解，学生手算无法给出唯一解' };
+    var sols = {};
+    for (var i = 0; i < n; i++) sols[vars[i]] = M[i][n];
+    var out = {};
+    Object.keys(sols).forEach(function (k) { out[k] = frStr(sols[k]); });
+    return { ok: true, solutions: out };
+  }
+  function trySubstitution(eqs, vars, depth) {
+    if (vars.length === 1) return null; // 交给单元求解
+    if (depth > vars.length) return null;
+    // 找一方程、一变量，该方程对该变量线性且系数非零 → 解出代入
+    for (var ei = 0; ei < eqs.length; ei++) {
+      var e = eqs[ei];
+      for (var vi = 0; vi < vars.length; vi++) {
+        var vn = vars[vi];
+        var by = powPoly(e, vn);
+        var a1 = by['1'], a0 = by['0'];
+        if (!a1 || eIsZero(a1)) continue;
+        var hasHigher = Object.keys(by).some(function (k) { return Number(k) > 1; });
+        if (hasHigher) continue;
+        // x = -a0/a1
+        var xExpr;
+        try { xExpr = eDiv(eNeg(a0), a1); } catch (err) { continue; }
+        if (eIsZero(eAdd(by['2'] || E([]), by['1'] || E([])))) continue;
+        // 代入其余方程与其余变量（替换 vn）
+        var rest = [];
+        var restVars = vars.filter(function (v) { return v !== vn; });
+        var subOk = true;
+        eqs.forEach(function (ee, idx) {
+          if (idx === ei) return;
+          try { rest.push(replaceVar(ee, vn, xExpr)); } catch (err) { subOk = false; }
+        });
+        if (!subOk) continue;
+        if (restVars.length === 1) {
+          var un = solveUnary(rest[0], restVars[0]);
+          if (!un.ok || un.solutions.length === 0 || un.solutions[0] === '恒等式（任意该变量均可）') continue;
+          // 回代得到 vn
+          var sols = [];
+          un.solutions.forEach(function (solS) {
+            var solE = parseE(solS.replace(/−/g, '-'));
+            var vnE = replaceVar(xExpr, restVars[0], solE);
+            var so = {}; so[restVars[0]] = solS; so[vn] = exprStr(vnE);
+            sols.push(so);
+          });
+          return { ok: true, solutions: sols };
+        }
+        // 更多变量：递归
+        var sub = trySubstitution(rest, restVars, depth + 1);
+        if (sub && sub.ok) {
+          var out2 = [];
+          sub.solutions.forEach(function (s0) {
+            var e2 = xExpr;
+            Object.keys(s0).forEach(function (k) { if (k !== vn && restVars.indexOf(k) >= 0) e2 = replaceVar(e2, k, parseE(s0[k].replace(/−/g, '-'))); });
+            var s1 = {}; Object.keys(s0).forEach(function (k) { s1[k] = s0[k]; }); s1[vn] = exprStr(e2);
+            out2.push(s1);
+          });
+          return { ok: true, solutions: out2 };
+        }
+      }
+    }
+    return null;
+  }
+  function tryVieta(eqs, vars) {
+    // {x+y=s, xy=p}（或加符号变化）→ t²−st+p=0
+    if (vars.length !== 2) return null;
+    var e0 = eqs[0], e1 = eqs[1];
+    function checkPair(a, b) {
+      // a: 线性 x+y = s（常数项 s 已到 rhs：a = x+y−s）
+      var byX = powPoly(a, vars[0]), byY = powPoly(a, vars[1]);
+      var isSum = !eIsZero(byX['1'] || E([])) && !eIsZero(byY['1'] || E([]))
+        && eIsZero(byX['2'] || E([])) && eIsZero(byY['2'] || E([]))
+        && byX['1'] && byY['1']
+        && frAdd(byX['1'].cDiff, byY['1'].cDiff) !== null; // 占位；下方直接判断
+      return null;
+    }
+    // 简判：各方程是否形如 xy−p=0 或 x+y−s=0
+    function shape(e, kind) {
+      var byX = powPoly(e, vars[0]);
+      var byY = powPoly(e, vars[1]);
+      var t0 = e.terms[0] || T(fr(0), 1, 0, {});
+      if (kind === 'prod') {
+        // 单项 xy + 常数
+        var has = e.terms.some(function (t) { return (t.v[vars[0]] || 0) === 1 && (t.v[vars[1]] || 0) === 1; });
+        var consts = findConst(e);
+        if (has && consts !== null && e.terms.every(function (t) {
+          return ((t.v[vars[0]] || 0) === 1 && (t.v[vars[1]] || 0) === 1) || (Object.keys(t.v).length === 0 && t.s === 1 && t.p === 0);
+        })) {
+          return eNeg(consts); // xy = p
+        }
+        return null;
+      }
+      if (kind === 'sum') {
+        var hasX = e.terms.some(function (t) { return (t.v[vars[0]] || 0) === 1 && Object.keys(t.v).length === 1; });
+        var hasY = e.terms.some(function (t) { return (t.v[vars[1]] || 0) === 1 && Object.keys(t.v).length === 1; });
+        var consts = findConst(e);
+        if (hasX && hasY && consts !== null && e.terms.every(function (t) {
+          return ((t.v[vars[0]] || 0) === 1 && Object.keys(t.v).length === 1)
+            || ((t.v[vars[1]] || 0) === 1 && Object.keys(t.v).length === 1)
+            || (Object.keys(t.v).length === 0 && t.s === 1 && t.p === 0);
+        })) {
+          return eNeg(consts); // x+y = s（常数移到右侧）
+        }
+        return null;
+      }
+      return null;
+    }
+    function findConst(e) {
+      var cs = e.terms.filter(function (t) {
+        return Object.keys(t.v).length === 0 && t.s === 1 && t.p === 0;
+      });
+      if (cs.length === 1) { var c = cs[0].c; return E([T(c, 1, 0, {})]); }
+      if (cs.length === 0) return E([]);
+      return null;
+    }
+    var p = shape(e0, 'prod') || shape(e1, 'prod');
+    var s = shape(e0, 'sum') || shape(e1, 'sum');
+    if (p && s) {
+      // t²−s·t+p=0
+      var poly = eAdd(ePower(eVar(vars[0], 2), 1), eSub(E([]), eMul(eVar(vars[0]), s)));
+      poly = eAdd(poly, p);
+      var un = solveUnary(poly, vars[0]);
+      if (un.ok && un.solutions.length === 2) {
+        // 两组解：{vars[0]=r1, vars[1]=r2} / {vars[0]=r2, vars[1]=r1}
+        var r1 = parseE(un.solutions[0].replace(/−/g, '-'));
+        var r2 = parseE(un.solutions[1].replace(/−/g, '-'));
+        var s1 = {}; s1[vars[0]] = exprStr(r1); s1[vars[1]] = exprStr(r2);
+        var s2 = {}; s2[vars[0]] = exprStr(r2); s2[vars[1]] = exprStr(r1);
+        return { ok: true, solutions: [s1, s2] };
+      }
+    }
+    return null;
+  }
+  function solveSystem(eqStrs, vars) {
+    try {
+      if (!Array.isArray(eqStrs) || eqStrs.length < 1) throw new Error('方程组不能为空');
+      if (!Array.isArray(vars) || vars.length < 1) throw new Error('变量列表不能为空');
+      var eqs = eqStrs.map(parseEq);
+      // 1) 全线性 → 高斯
+      var allLinear = true;
+      eqs.forEach(function (e) { vars.forEach(function (v) { if (!isLinearOn(e, v)) allLinear = false; }); });
+      if (allLinear && eqs.length === vars.length) {
+        var lin = solveLinearSystem(eqs, vars);
+        if (lin.ok) return { ok: true, solutions: [lin.solutions], method: '线性方程组（高斯消元）' };
+      }
+      // 2) 韦达对称型
+      var vt = tryVieta(eqs, vars);
+      if (vt) return { ok: true, solutions: vt.solutions, method: '对称方程组（韦达定理）' };
+      // 3) 消元代入
+      var sub = trySubstitution(eqs, vars, 0);
+      if (sub) return { ok: true, solutions: sub.solutions, method: '代入消元法' };
+      // 4) 一元兜底
+      if (vars.length === 1 && eqs.length >= 1) {
+        var un = solveUnary(eqs[0], vars[0]);
+        if (un.ok && un.solutions[0] !== '恒等式（任意该变量均可）')
+          return { ok: true, solutions: un.solutions.map(function (s0) { var o = {}; o[vars[0]] = s0; return o; }), method: '一元求根公式' };
+      }
+      return { ok: false, error: '该方程组形式超出学生手算范围（仅支持：线性方程组/可代入消元/对称韦达/一元一次·二次）' };
+    } catch (err) {
+      return { ok: false, error: String(err.message || err) };
+    }
+  }
+
+  // ---------- 对外 API ----------
+  var api = {
+    // 表达式化简/精确计算
+    calc: function (exprStr0) {
+      try {
+        var e = eCompact(parseE(exprStr0));
+        return { ok: true, exact: exprStr(e), approx: approxOnly(e) };
+      } catch (err) {
+        return { ok: false, error: String(err.message || err) };
+      }
+    },
+    // 代入 vars = {x: 'a(√3-1)', a: '4'}
+    substitute: function (exprStr0, vars) {
+      try {
+        var e = parseE(exprStr0);
+        Object.keys(vars || {}).forEach(function (k) {
+          e = replaceVar(e, k, parseE(String(vars[k])));
+          e = eMul(eConst(1), e); // 触发合并（该乘法会重排但可能仍不合并同类；用 compact 兜底）
+        });
+        e = eCompact(e);
+        return { ok: true, exact: exprStr(e), approx: approxOnly(e) };
+      } catch (err) {
+        return { ok: false, error: String(err.message || err) };
+      }
+    },
+    // 一元求根
+    solve: function (exprStr0, varName) {
+      try {
+        var e;
+        var s0 = String(exprStr0).replace(/\s+/g, '');
+        if (s0.indexOf('=') >= 0) { var pp = s0.split('='); e = eSub(parseE(pp[0]), parseE(pp[1])); }
+        else e = parseE(s0);
+        var un = solveUnary(e, varName || 'x');
+        if (!un.ok) return un;
+        return { ok: true, exact: '求解 ' + (varName || 'x') + '：' + un.solutions.map(function (sx) { return (varName || 'x') + ' = ' + sx; }).join('  或  '), solutions: un.solutions };
+      } catch (err) {
+        return { ok: false, error: String(err.message || err) };
+      }
+    },
+    // 方程组
+    system: function (eqs, vars) {
+      return solveSystem(eqs, vars);
+    }
+  };
+  // approxOnly：无变量→近似值（仅供验证对照），有变量→null
+  function approxOnly(e) {
+    var hasVar = false; var val = 0;
+    e.terms.forEach(function (t) {
+      if (Object.keys(t.v).length) { hasVar = true; return; }
+      var v = 1;
+      if (t.s !== 1) v *= Math.sqrt(t.s);
+      if (t.p) v *= Math.pow(Math.PI, t.p);
+      val += (Number(t.c.n) / Number(t.c.d)) * v;
+    });
+    if (hasVar) return null;
+    return Math.round(val * 100000) / 100000;
+  }
+
+  global.studentCalc = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+// ── 3.55 草稿纸档案（演算存档·可回滚·模拟真实算草纸）──────
+// 模型每步 student_calc/student_solve 的结果自动"写进档案"（本地持久化），
+// 可 scratch_paper 查看、scratch_rollback 回滚/撕掉，模拟真实草稿纸的"改一步再算"。
+var SCRATCH_KEY = 'tutorreel_scratch_paper';
+function scratchLoad() {
+  try { var s = localStorage.getItem(SCRATCH_KEY); if (s) { var o = JSON.parse(s); if (o && o.steps) return o; } } catch (e) {}
+  return { next: 1, steps: [] };
+}
+var scratchPaper = scratchLoad();
+function scratchPersist() {
+  try { localStorage.setItem(SCRATCH_KEY, JSON.stringify(scratchPaper)); } catch (e) {}
+}
+function scratchSave(tool, input, output) {
+  scratchPaper.steps.push({ id: scratchPaper.next, tool: tool, in: String(input || '').slice(0, 400), out: String(output || '').slice(0, 400) });
+  scratchPaper.next++;
+  scratchPersist();
+  updateScratchBadge();
+  return scratchPaper.steps.length;
+}
+function scratchListText() {
+  if (!scratchPaper.steps.length) return '草稿纸档案为空（尚无演算步骤）';
+  return scratchPaper.steps.map(function (s) {
+    return '第' + s.id + '步 [' + s.tool + '] 输入: ' + s.in + ' → 结果: ' + s.out;
+  }).join('\n');
+}
+function scratchRollback(lastId) {
+  // lastId=0 清空；否则保留 id <= lastId 的步骤（模拟撕掉后面的草稿）
+  var n = lastId === 0 ? 0 : Number(lastId) || 0;
+  scratchPaper.steps = scratchPaper.steps.filter(function (s) { return s.id <= n; });
+  scratchPersist();
+  updateScratchBadge();
+  return scratchPaper.steps.length;
+}
+function scratchClear() {
+  scratchPaper.steps = [];
+  scratchPersist();
+  updateScratchBadge();
+}
+function updateScratchBadge() {
+  var el = document.getElementById('scratch-badge');
+  if (el) el.textContent = '📓 草稿 ' + scratchPaper.steps.length + ' 步';
+}
+
+var TOOLS = [
+  { type:'function', function:{ name:'ggb_eval',
+    description:'在 GeoGebra 画布执行一条构造命令（evalCommand），用于逐步构造图形：点 A=(0,4)、面 Polygon(A,B,C,D)、线 Line(A,C)、平行线 Line(D,gAC)、动点 Point(Segment(C,D))、射线 Ray(A,F)、交点 Intersect(rAF,lDE)、线段 Segment(C,E)、距离 Distance(C,E)、动态文字 Text(...)、样式 SetColor/SetThickness/ShowLabel。每次一条命令。',
+    parameters:{ type:'object', properties:{ command:{ type:'string', description:'要执行的 GeoGebra 命令，如 "E=Intersect(rAF,lDE)"' } }, required:['command'] } } },
+  { type:'function', function:{ name:'ggb_query',
+    description:'查询 GeoGebra 画布当前状态，用于验证构造结果。mode=value 返回对象数值（如某距离对象的数值），mode=defined 返回对象是否已定义。',
+    parameters:{ type:'object', properties:{ names:{ type:'string', description:'对象名，逗号分隔，如 "A,B,dAB"' }, mode:{ type:'string', enum:['value','defined'], description:'value=取数值（默认）；defined=是否已定义' } }, required:['names'] } } },
+  { type:'function', function:{ name:'student_calc',
+    description:'学生草稿纸：模拟学生手算的精确计算引擎（浏览器本地执行，不需画布）。输入数学表达式，返回精确手算结果与步骤对照。支持：分数/根式（√18→3√2，√5 保留 √5，1/√2→√2/2，分母有理化）、π、特殊角三角（sin/cos/tan 只能取表内角 0/15/30/45/60/75/90/105/120/135/150/165/180，sin75° 得 (√6+√2)/4 精确式）、多项式展开与合并（(x+1)(x+2)→x²+3x+2）、按普通变量代入化简（vars 如 {"x":"3"}）。**通用角三角函数/反三角/对数等学生手算不可达的操作会明确报错**——你应该改用特殊角或定理。**这是你算不精确时的"手"，别脑内暴力算**。返回 {exact, approx?}，exact 是手写精确式，approx 仅供画布复核。',
+    parameters:{ type:'object', properties:{ expr:{ type:'string', description:'表达式，如 "(x+1)(x+2)" 或 "√18" 或 "sin(75)"' }, vars:{ type:'object', description:'可选代入映射，如 {"x":"3","a":"4"}' } }, required:['expr'] } } },
+  { type:'function', function:{ name:'student_solve',
+    description:'学生草稿纸：解方程/方程组（模拟学生手算，精确解，浏览器本地执行）。支持：一元一次、一元二次（求根公式，精确根式如 x=a(√3−1)）、二元一次方程组（加减/代入消元）、可代入消元的二元二次、对称型（x+y=s, xy=p → 韦达定理）。输入 eqs（可选带 =；不带 = 视为 =0）、vars（未知数列表）。不支持三次以上/无法消元的方程组，会明确报错。**解方程必须用它而不是脑内硬算**。返回 solutions（对象数组：每组变量→精确解）。',
+    parameters:{ type:'object', properties:{ eqs:{ type:'array', description:'方程列表，如 ["x+y=4","x*y=3"] 或 ["x^2-2=0"]' }, vars:{ type:'array', description:'未知数列表，如 ["x","y"]' } }, required:['eqs','vars'] } } },
+  { type:'function', function:{ name:'scratch_paper',
+    description:'查看学生草稿纸档案（演算存档）：每次 student_calc/student_solve 的输入与结果都自动写进了档案（草稿纸上的逐步演算记录）。返回全部或最近若干步的"输入 → 结果"清单，用于回顾自己算到哪、哪一步的结果被前面引用了。**开始新一段推导前先看它，避免重复/脑内重推。**',
+    parameters:{ type:'object', properties:{ n:{ type:'number', description:'可选：只取最近 n 步（默认全部）' } } } } },
+  { type:'function', function:{ name:'scratch_rollback',
+    description:'回滚学生草稿纸档案：像撕掉草稿纸后面几行一样，删除第 id 步之后（含）的所有演算记录，回到第 id 步的结果继续。算错了一步就回滚到之前对的步骤重算，**不要整段重来更不要脑内重推**。id=0 表示清空全部档案（换一张纸）。返回回滚后剩多少步。',
+    parameters:{ type:'object', properties:{ id:{ type:'number', description:'保留到第几步（含），其后全部删除；0=清空' } }, required:['id'] } } }
+];
+
+function runGGBTool(name, argsStr) {
+  var args;
+  try { args = JSON.parse(argsStr || '{}'); } catch (e) { return { ok:false, result:'工具参数 JSON 解析失败: ' + e.message }; }
+  // 学生草稿纸工具（本地执行，不需 GGB）
+  if (name === 'student_calc' || name === 'student_solve') {
+    var sc = (typeof window !== 'undefined' && window.studentCalc) || (typeof globalThis !== 'undefined' && globalThis.studentCalc);
+    if (!sc) return { ok:false, result:'学生草稿纸引擎未加载' };
+    try {
+      if (name === 'student_calc') {
+        var r = sc.calc(String(args.expr || ''));
+        if (!r.ok) return { ok:false, result:'✏️ 草稿纸：' + r.error };
+        var exact = String(r.exact || '');
+        if (exact.length > 220) exact = exact.slice(0, 220) + '…（截断）';
+        var stepN = scratchSave(name, args.expr || '', exact);
+        return { ok:true, result: '✏️ 学生草稿纸 = ' + exact + '（📓 已写进草稿档案 第' + stepN + '步）' + (r.approx !== null && r.approx !== undefined ? '；≈' + r.approx + ' 仅供画布复核' : '') };
+      }
+      var sv = sc.system(args.eqs || [], args.vars || []);
+      if (!sv.ok) return { ok:false, result:'✏️ 草稿纸：' + sv.error };
+      var body = sv.solutions.map(function (s0) {
+        return Object.keys(s0).map(function (k) { return k + ' = ' + s0[k]; }).join('，');
+      }).join('；或 ');
+      var stepN2 = scratchSave(name, (args.eqs || []).join(' ; '), body);
+      return { ok:true, result: '✏️ 草稿纸求解（' + sv.method + '）：' + body.slice(0, 400) + '（📓 已写进草稿档案 第' + stepN2 + '步）' };
+    } catch (e2) {
+      return { ok:false, result:'草稿纸异常: ' + String(e2.message || e2) };
+    }
+  }
+  if (name === 'scratch_paper') {
+    var txt = scratchListText();
+    if (txt.length > 800) txt = txt.slice(-800);
+    return { ok:true, result: '📓 草稿档案（' + scratchPaper.steps.length + ' 步）：\n' + txt };
+  }
+  if (name === 'scratch_rollback') {
+    var left = scratchRollback(args.id === undefined ? 0 : args.id);
+    return { ok:true, result: '📓 草稿已回滚，剩余 ' + left + ' 步（id=' + (args.id || 0) + '）——可基于该步继续，不用脑内重推' };
+  }
+  var api = ggbApi;
+  if (!api) return { ok:false, result:'GeoGebra 尚未就绪，请稍候再试' };
+  try {
+    if (name === 'ggb_eval') {
+      var cmd = String(args.command || '').trim();
+      if (!cmd) return { ok:false, result:'缺少 command 参数' };
+      var err = null;
+      try { api.evalCommand(cmd); } catch (e) { err = e; }
+      var m = /^\s*([A-Za-z][A-Za-z0-9]*)\s*=/.exec(cmd);
+      if (m && !err) {
+        // 对象级命令：确认对象已定义
+        var defined = null;
+        if (typeof api.exists === 'function') {
+          try { defined = !!api.exists(m[1]); } catch (e) {}
+        }
+        if (defined === false) return { ok:false, result:'命令已执行但对象 ' + m[1] + ' 未定义（可能依赖对象缺失或语法不支持）：' + cmd };
+      }
+      if (err) return { ok:false, result:'evalCommand 异常: ' + String(err.message || err) };
+      return { ok:true, result:'OK · ' + cmd + (m && defined === true ? '（' + m[1] + ' 已定义 ✓）' : '') };
+    }
+    if (name === 'ggb_query') {
+      var names = String(args.names || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!names.length) return { ok:false, result:'缺少 names 参数（逗号分隔对象名）' };
+      var mode = args.mode || 'value';
+      var parts = names.map(function (n) {
+        if (mode === 'defined') {
+          if (typeof api.exists === 'function') {
+            try { return n + '=' + (api.exists(n) ? 'true' : 'false'); } catch (e) {}
+          }
+          try { return n + '=' + (api.getValueString(n) !== '?' ? 'true' : 'false'); } catch (e) {}
+          return n + '=未知';
+        }
+        var v = null;
+        try { v = api.getValueString(n); } catch (e) {}
+        if (v === undefined || v === null || v === '') {
+          try { v = String(api.getValue(n)); } catch (e2) {}
+        }
+        return n + '=' + (v === null || v === undefined || v === '' ? '未定义' : v);
+      });
+      return { ok:true, result: parts.join('；') };
+    }
+    return { ok:false, result:'未知工具 ' + name };
+  } catch (e) {
+    return { ok:false, result:'工具执行异常: ' + String(e.message || e) };
+  }
+}
+
+// ── 4. 系统提示词（含全部防护，勿回退）───────────────────────
+var SYSTEM_PROMPT = [
+  '你是数学题教师。工作台里嵌入了 GeoGebra 交互画布（浏览器本地执行，无需额外权限）。',
+  '【最重要·条件溯源——严禁凭空补条件】题目条件可能藏在图上标注/题干末尾（这叫隐藏条件），漏读=证错=0分。题目以图片形式给出时，你**第一轮必须直接看图**：逐字读出图片上所有文字（含题干末尾/角落的附加条件），把它当作题目原文。**你写进 question 的每一个条件都必须能在原题中找到原文出处**（题干某句话 / 图上某处标注），并写进 conditionSource 字段（引用原文片段 + 位置说明）。**禁止**在题意之外自行编造或臆测条件（例如：不许提前假定"某两线段相等"之类）；**禁止**把"任意位置都成立"当作默认前提——先看题干/图给出的具体条件与特定构型，再决定策略。若初读找不到能让结论成立的条件，再次逐字细看后再下结论，不要轻易判定"原命题不成立"。',
+  '【先判定题型模式（第一优先，二选一）】①**有题图**（图片题目）、题干含"如图/如图示/如图所示"、或题干出现几何结构词（正方形/三角形/圆/线段/边/顶点/对角线/平行/垂直/延长/交于等）→ **图模式·特定解**：按下方【以图为先·特定解思维】执行；②**纯文本无图且是求值/化简/恒等式类**（一般不依赖图形位置）→ **文本模式·泛化解**：按下方【文本模式·泛化解思维】执行（此时"对任意情形成立"是正确目标，不要虚构图、不要找特定位置）。',
+  '【文本模式·泛化解思维（无图题适用）】纯文本题（代数恒等式/三角求值/数列/函数/一般化命题）的结论**对满足题干条件的全体情形成立**：你应该证明/推导**普遍公式**（如"对任意满足条件的 x 都成立"），用代数/定理步步推导到精确式即可，**不需要也不允许虚构一个图形或特定位置**。反三角/近似/查表同样禁止；画布不是必须（可省略或仅作陪衬），草稿纸 student_calc/student_solve 正常使用。',
+  '【以图为先·特定解思维（防抽象空转，最重要之一）】',
+  'a) **题图不是装饰**：它编码了位置与结构信息（顶点标号顺序、点在边上哪个位置、哪些是已知点、哪个是需要满足条件的“特定点”、线的走向）。你的画布构造必须**逐项复刻题图**；若画布与题图不符（顶点方向、动点位置、线过哪），说明构造有误——先修图再推理，不许在“抽象层面”上脑内自嗨。',
+  'b) **特定解，不是泛化解**：这类“求证××”题目的结论**只在题干＋隐藏条件＋题图结构共同给出的特定构型下成立**（隐藏条件常恰好把某个点的位置唯一确定到图上的特定位置）。**不要**尝试证明“对任意动点/任意参数都成立”；更不要在一般位置发现“不成立”就空转。你的任务是在**题图给定的约束下**证明结论，不是发现一个普适规律。',
+  'c) **泛化尝试只作一次性快速一致性检查（≤30 秒）**：只试一两个"特殊位置/极限"核对前提是否必要（如某个动点在路径边界或中点时可能不满足），**试完立刻收手**，结论必须以特定前提推导，不许反复试一般位置。',
+  'c2) 🔑【定理退化 → 按退化的推，禁止纠结（最重要）】如果你用一两个特例/数值验证发现"结论对一般位置不成立"（如 CE≠CF、比例不成）——**这不是题目错了，这正是特定解题**：结论只在某个特定位置/特定参数下成立。此时**立刻停止一切泛化探索与重复验证**：① 把"结论成立"写成约束方程（如 |CE|=|CF| 或目标比例式），用 student_solve 精确解出位置的唯一取值（隐含参数，如 t=a(√3−1)）；② 这个特定取值就是**隐含前提**：写进 question（注明"隐含"）与 conditionSource（注明"由结论反推"）；③ 用该前提重新构造/验证画布，并用该特定构型下成立的定理（全等/相似/勾股/等腰/特殊角）完成证明；④ 讲题时先说明"原题隐含前提为…，否则结论不成立"。**禁止**：继续试更多一般位置、重读题目、怀疑题目有误、把"不成立"当结论交卷、反复"重新检查"。数学题没有那么多泛化定理可推——**能出题的绝大多数都是特定解**，你的任务就是把那个特定位置找出来并证明它。',
+  'd) **以图校准**：图中点/线/角的相对关系（哪两个角看起来相关、动点在路径的哪一段、某线段是否像水平/垂直、45° 结构等）用来**复查**你的构造与推导方向；画布读数与题图视觉一致时才继续，不一致先解决不一致。',
+  '',
+  '【工作方式：ReAct 工具循环——几何推理必须用画布做，不许脑内瞎猜】',
+  '你是用 GeoGebra 画布做几何实验的数学家，不是心算员。**不许闭眼硬猜几何结论——每个关键量都要从画布读出真实数值来核对（构造→度量→查询→判断→修正→再查询）。**',
+  '【从上次停止处继续——禁止从头重来】每一轮开始时你处于上一轮结束的状态：你上轮的完整思考链会随历史回传给你（直接接续），上轮的工具结果（定义成功/失败、读到的数值）就是画布现状。**因此不要重新读题/重新描述题目/重新推导已做过的步骤/重复定义已存在对象**（同一命令重复定义=空转，会被引擎审计拦截）；需要回顾现状直接看上文工具结果，或 ggb_query 查画布；**每一步只做"下一步"**：读上轮结论 → 决定下一步动作 → 调用工具/推进证明 → 直到出最终 JSON。',
+  '循环节奏：',
+  '1) 第一步就动手：把图形骨架逐步构造出来（每轮请求批量执行 3-8 条 ggb_eval），**构造一批后立刻用 ggb_query 查询关键对象**（是否存在？数值多少？）——一轮内"构造+查询"搭配进行；不许只构造不查询，更不许只空想不构造。',
+  '2) 用查询来**探索与复核**：需要判断的关系（距离相等 / 角度 / 平行 / 交点位置）可写成 GGB 可度量对象（Distance、Angle、斜率表达式、点坐标）用 ggb_query 读数——但**这只是实验台观测，不是证明**。',
+  '3) 🔑【证明与验证必须严格分开——禁止"量角器算角"】画布读数（如某距离、某角度）只代表"画布上测得如此"，**绝不能当作证明依据**写在 solution/teaching/answer 里（"因为量出两条线段相等，所以它们相等"是错的，会被判没证明）。**证明必须由定理链构成**：每一步都要写明所用定理/定义/性质（如"由两直线平行得内错角相等""由 SAS 判定全等""由勾股定理得""由余弦定理/正弦定理""由向量点积""由切线长定理"等）。读数只允许出现在**验证语义**（如"经画布复核：两距离 ≈2.9，与定理证明结论一致 ✓"）。**禁止**用拖动测量/量角/读数替代证明步骤；几何题证明优先选择课内定理（全等/相似/等腰/勾股/圆周角/平行线性质等）！',
+  '4) ⚠️【数值矛盾 → 反查/反推隐含前提】若构造/查询后未满足结论（如要证的两个量不相等、某量对不上）：①先回题干/图找文字与几何标记条件（等长记号/角弧/直角/平行箭头，这些也是条件）；②都找不到 → 说明**题目隐含前提缺失**，但不要让结论"不成立"就放弃——**从结论反推隐含前提**：把"结论成立"写成约束方程（如设边长 a、CF=x，写出 |CE|=|CF| 的方程），用 student_solve 精确解出未知量/约束（如 x=a(√3−1)），再回代验证它等价于某个简洁条件（如此时 AE=AC）；③把反推出来的条件作为**隐含前提**写进 question（注明"隐含"）与 conditionSource（注明"由结论反推：…"）；④用该前提重新构造/验证并讲题（讲题时先说明"原题隐含前提为…，否则结论不成立"）。',
+  '5) 查询发现构造错误（对象未定义 / 数值异常 / 线不平行）→ 用 ggb_eval 修正或补构造 → 再查询，直到数据自洽。',
+  '5b) ⚠️【工具结果是证据，不是仪式】ggb_query 读到的数值、student_calc/student_solve 给出的精确结果**必须被你的下一步推理引用**（要么直接引用数值/等式继续推导，要么说明为何不需要该数据）；画布对象未定义时**先修复再继续推理**（先 ggb_query mode:"defined" 确认存在性，再改正命令/依赖，成功定义后可继续；引擎会在你带着未修复失败交卷时拦截并要求先修复）。禁止"调用完就忽略结果、脑内继续"。',
+  '6) 结论量最后复核：输出 JSON 之前，最后一次 ggb_query 复核你将要下结论的量与定理结论一致，但**证明文字仍以定理链为准**。',
+  '7) 全部验证通过后，输出**教学讲解正文**（Markdown + KaTeX，见【最终输出】；讲解末尾可带可选 JSON 附注块）。',
+  '',
+  '【解题硬性要求——全程手算可达，禁止计算器思维（学生思维做题）】',
+  'a) 答案与每个中间结论必须是**精确形式**：分数、带根号的精确式、π、特殊角三角函数（如 45°→√2/2、sin60°=√3/2、tan30°=√3/3）。**禁止** arcsin/arccos/arctan/反函数/对数/表格查值作为中间或最终结论；小数近似只允许出现在最后一句"经画布复核 ≈…"的验证语义里，**绝不允许充当解答主体**。',
+  'b) 坐标法/解析法允许，但必须**逐步代数推导、可手算**：设未知量→列方程（由定理/条件）→配方/因式分解/代入消元→得精确解。**禁止**"代入计算器求得""解得 ≈…"这类写法。',
+  'c) 如果某个解法需要 arcsin、无理数近似或查表才能"凑"出结果，**说明解法选错了**——改用整数/特殊角/定理/构造法（例：出现 45°/30°/60° 就用三角比与勾股，不要 arcsin(0.707)）。',
+  'd) 讲题稿（teaching）与 solution 要体现"这是考试里可手写的过程"，必要时注明"此处为手算过程"。',
+  'e) ⚠️【禁止脑内暴力算代数——草稿纸是唯一计算通道】你的"思考块"里**不允许做任何实际代数运算**（展开/合并/化简/代入/解方程/求根/根式化简/三角变换）。思考块只写策略和思路；凡是"计算"必须调用 student_calc（化简/展开/代入）或 student_solve（解方程/方程组），拿到精确结果再继续推。**做一步看一步**：每步单独调用一次，结果自动存进草稿档案（📓），推导前用 scratch_paper 回看、算错用 scratch_rollback(id) 回滚重算——像真实草稿纸一样改一步再算，**不要整段脑内重来**。如果你发现自己脑内写了"=（…)²+…"这类算式推导，立刻停下改用工具。**这不是可选项**——你的代数是短板，草稿纸是你的手。',
+  'f) ⚠️【坐标法/解析法同样禁止脑内算】设坐标系、代入坐标化简、展开平方、解联立、验证数值大小、比较 CE 与 CF 这类**坐标计算每一步也是实际运算**——思考里只允许写"我将设 A=(0,a)、F=(a,t)，然后求 E 的坐标并比较"这类**策略意图**；实际的代入/化简/方程求解必须逐步交给 student_calc/student_solve（或直接用 ggb_eval 构造 + ggb_query 读数复核）。**禁止**在思考里写完整段坐标推导（"设…代入…展开…得…"这种长算式流水账 = 脑内算，会被审计拦截）。',
+  'f) 若构造/查询后出现"结论不成立"这类矛盾（如要证的两个量不相等），先回图核对（可能漏读了隐藏条件），不要脑内硬算或改写原命题；有等价关系的线索（如某两组线段相等的条件）时，用 student_solve 解方程精确定位，而不是手算试探。',
+  '',
+  '可用工具：',
+  '- ggb_eval：执行一条构造命令（{"command":"..."}），在画布上**真的把图构造出来**。注意：关键动点必须用【无参数】Point(路径)（如 P=Point(Segment(A,B))，把动点放在线段/路径上）——Point(路径,参数) 是固定点拖不动、SetValue(P,数值) 会把路径点改写成复数致构造断裂，两者都禁用。',
+  '- ggb_query：查询画布数值/存在性，用于几何推理验证（{"names":"A,B,dAB","mode":"value|defined"}）。value 返回对象数值（距离/坐标/表达式值），defined 返回是否已定义。构造一批后必须用它核对。',
+  '- student_calc：学生草稿纸（精确手算引擎）：化简/展开/代入（{"expr":"(x+1)(x+2)"}）→ 返回精确式（√5 保留 √5、√18→3√2、分母有理化、sin75°→(√6+√2)/4）。**凡是需要"算"的代数步骤都必须交给它**（展开、代入化简、根式化简、特殊角三角、合并同类项），不要脑内口算；它报"学生手算不可达"时改用定理/特殊角。',
+  '- student_solve：学生草稿纸（方程求解）：（{"eqs":["x^2-3x+2=0"],"vars":["x"]}）→ 精确解（求根公式，带根号/分数的精确解）。解方程/方程组必须用它，禁止脑内暴力解。',
+  '- scratch_paper：查看草稿档案（每次 student_calc/student_solve 自动存档为一步：输入→结果）。推导前先回看，避免重复/脑内重推。',
+  '- scratch_rollback：回滚草稿档案（{"id":N} 删除第 N 步之后的记录；0=清空），像撕草稿纸换一步重算。算错某步就回滚到之前对的一步重算，**不要整段脑内重来**。',
+  '',
+  '【做一步看一步（草稿纸纪律）】代数推导必须拆成小步：一步＝一次 student_calc/student_solve 调用（如：先展开、再代入、再化简、再解方程，每一步单独调用一次并等结果）。每步结果自动写进草稿档案（📓 第N步）；推导前用 scratch_paper 看档；发现哪步错了用 scratch_rollback(id) 回滚到对的那步重算——模拟真实算草纸的"改一步再算"。**禁止**在一条消息里脑内连算多步再一次性抛出，**禁止**脑内替草稿纸运算。',
+  '',
+  '【GeoGebra 构造要点】',
+  '- 平行线必须"两件套"：先定义方向直线（如 l1=Line(A,B)），再过定点和该直线作平行线（如 l2=Line(P,l1)）。禁止 Line(P, A+B)（A+B 是点向量和，可能恰好等于某点→线未定义或不平行）、禁止 Line(P, AB)（AB 未定义对象）。',
+  '- 有 Distance 必须同时画对应 Segment（如 segXY=Segment(X,Y)，否则图上没有连线）。',
+  '- 动态读数：dXY=Distance(X,Y) 等距离对象 + Text(If(IsDefined(dXY), "dXY = " + dXY, "初始提示语"), 坐标) 形式的提示文字。提示必须是 Text(...) 对象（裸 If 表达式不会显示），必须用 If(IsDefined(...)) 保护初始退化态（动点在路径端点时相关对象未定义）；不要用 Round 参与字符串拼接（实测拼接会变空串）。',
+  '- 结论判断容差 0.05（如 |dXY-dUW|<0.05 即成立）。坐标比例已在页面层修正（1:1），无需在命令里处理。',
+  '',
+  '【最终输出——讲题，不是 JSON】最终轮输出的是**直接给学生看的教学讲解正文**，用 Markdown：分段小标题（###）、要点（- ）、KaTeX 公式（行内 $...$、块级 $$...$$）、自然段——把「审题（含隐含条件从哪来）→ 解题思路 → 每一步推导（引用草稿纸 student_calc/student_solve 的精确结果与画布 ggb_query 读数的验证）→ 验证说明 → 结论」完整讲清楚，是能照着讲给学生的讲题稿。讲解**末尾**可附一个可选 ```json 附注块（没有额外数据可以不附）：{ "answer":"一句话结论", "conditionSource":"每个条件的出处说明（引用题干原文片段+位置；隐含前提注明\"由结论反推\"）", "figureNote":"图形结构描述", "ggb":{"view":{"xmin":..,"xmax":..,"ymin":..,"ymax":..},"note":"演示提示（如：拖动 F 观察…）"} }——**不要写 ggb.commands/readouts**（画布已被你本轮的工具调用真实构造，无需重演）。正文绝不允许是裸 JSON 或 JSON 包裹讲解。',
+  '',
+  '【强制流程（务必遵守）】每一轮请求都必须实际调用工具：要么 ggb_eval 构造/补构造，要么 ggb_query 验证/核对；构造与查询要搭配（一轮里至少 1 条 ggb_query，除非画布还没东西可查）。如果某一轮结束没有任何工具调用且还没输出最终讲解正文，下一轮必须继续调用工具，不许跳过工具直接结束，更不许空转长篇推理。工具参数必须完整：ggb_eval 必须带 command（如 {"command":"A=(0,4)"}），ggb_query 必须带 names（如 {"names":"A,B,dAB","mode":"value"}）。',
+  '【节奏控制】思考块要短而准，把推导交给画布验证：每轮工具调用建议 3-8 条（含至少 1 条 ggb_query）；一轮里已执行 ≥1 条工具调用就继续下一轮。最终讲解里的每一步推导都要有依据：草稿纸 student_calc/student_solve 的精确结果、ggb_query 的真实读数（结论量如 |dXY-dUW|<0.05 成立要有最后一次 ggb_query 读数支撑）。',
+  '【查询是完成证明的复核环节（不可省略）】仅仅画图不算完成任务：**必须至少有一次 ggb_query 调用，实际读到关键量的真实数值**（如各对象距离/坐标），用它**复核**定理证明的结论（数值与定理结论一致即通过）。但再次强调：读数只用于复核，**证明文字必须由定理链构成**。若你的一次响应里连续两轮都没有 ggb_query（只有 ggb_eval 或只有思考），就会被视为未验证——输出最终讲解前最后一轮必须包含 ggb_query。'
+].join('\n');
+
+// ── 4.5 学段定性 Agent（分类 → 学段思维约束；失败自动降级不阻塞）─────
+// 每个学段对应的“解题思维约束”段落，拼接进解题 system prompt 尾部
+var STAGE_PROMPTS = {
+  zhongxiao: '【学段定性：中小学】用中小学学生的思维解题：能用算术/图形直观/初等几何定理解决的不上高级工具；几何证明必须用全等/相似/勾股/圆周角/平行线性质等课内定理构成证明链，不靠测量；列方程是允许的；坐标系与解析法可作为辅助但必须注明“解析法验证”，不要用导数/极限/复数等超纲概念；**全部计算手算可达：结果保持精确式（如 √3−1、1/2、45°），禁 arcsin/小数近似当答案**。讲题语言适合学生听懂。',
+  gaozhong: '【学段定性：高中】用高中数学思维解题：解析几何（坐标法）、函数/导数、三角函数、数列、向量、立体几何向量法、不等式均可用；解题步骤要符合高考答题规范（先设、再列、再算、最后下结论）；几何题优先课内定理（全等/相似/正弦余弦定理/勾股/向量法）证明，坐标法作为辅助计算；**证明过程必须由定理推导构成，不可用量测读数代替证明**；**全程手算可达：精确式（如 2a(√3−1)、√3/2、45°），禁 arcsin/近似值当解答主体**。讲题时说明思路来源。',
+  daxue: '【学段定性：大学】用大学数学思维解题：可以自由使用微积分、线性代数、概率论、复分析、实分析等工具；证明要严谨（定义-引理-定理）；讲解时可用高等符号与术语，但每一步说明理由；**禁止把数值实验（读数）当证明**；**保留精确解析表达，避免依赖数值近似**。',
+  jingsai: '【学段定性：竞赛】按数学竞赛思维解题：允许构造性技巧、数论/组合/极端原理/无穷递降等竞赛方法；强调巧妙化简与“难想的引理”；讲题时点出关键“妙招”；**证明必须完整严谨，读数只作辅助验证**；**全部结果保持精确形式，禁 arcsin/查表/小数近似当答案**。',
+  zonghe: '【学段定性：综合/无法确定】按最合适的学段处理：优先高中思维，若题明显用中小学/大学方法更自然则按对应学段；讲题时先说明“本题属于 X 学段”，再按该学段规范作答；**证明必须由定理链构成，禁止量测读数充当证明**；**全程手算可达：精确式（根号/π/特殊角），禁 arcsin/小数近似当答案**。'
+};
+var STAGE_LABELS = { zhongxiao: '中小学', gaozhong: '高中', daxue: '大学', jingsai: '竞赛', zonghe: '综合' };
+
+// ── 4.6 思考强度（off/low/high/max，推理预算档位）──────
+// 思考强度 = API 层参数（reasoning_effort / enable_thinking 原生控制）+ max_tokens 预算 + 提示词，三管齐下
+var THINK_LEVELS = {
+  off:  { maxTokens: 1500,  effort: 'low',   noThinking: true,  prompt: '【思考强度：off · 快速行动】思考块最多 3 句（只写行动决策），立即调用工具；禁止长篇推导与多角度权衡；代数计算仍走草稿纸（student_calc/student_solve），不要脑内算。' },
+  low:  { maxTokens: 4000,  effort: 'low',   noThinking: false, prompt: '【思考强度：low · 轻度】思考块短而精（≤200 字），想清方向就行动；不要反复验证同一件事；代数计算走草稿纸。' },
+  high: { maxTokens: 32000, effort: 'medium', noThinking: false, prompt: '【思考强度：high · 深度】允许较充分推演与验证（每轮 1-3 分钟属预期）；仍禁止脑内代数——计算全走草稿纸（student_calc/student_solve）。' },
+  max:  { maxTokens: 32000, effort: 'high',  noThinking: false, prompt: '【思考强度：max · 极致】允许极其充分的推演、多方案比较与反复验证（耗时预计较长）；代数计算必须走草稿纸，思考块专注推理策略与验证思路。' }
+};
+function getThinkLevel() {
+  var v = document.getElementById('think-strength').value;
+  return THINK_LEVELS[v] || THINK_LEVELS.high;
+}
+function saveThinkLevel() {
+  try { localStorage.setItem('tutorreel_think', document.getElementById('think-strength').value); } catch (e) {}
+}
+(function initThink() {
+  try {
+    var v = localStorage.getItem('tutorreel_think');
+    if (v && THINK_LEVELS[v]) document.getElementById('think-strength').value = v;
+  } catch (e) {}
+})();
+
+// ── 4.7 上下文预算（默认 1M token；超限裁剪最旧完整轮次）──────
+function getCtxBudget() {
+  var v = Number(document.getElementById('ctx-budget').value || 1000000);
+  return (v > 0 && isFinite(v)) ? v : 1000000;
+}
+function saveCtxBudget() {
+  try { localStorage.setItem('tutorreel_ctx', String(getCtxBudget())); } catch (e) {}
+}
+(function initCtx() {
+  try {
+    var v = localStorage.getItem('tutorreel_ctx');
+    if (v) document.getElementById('ctx-budget').value = v;
+  } catch (e) {}
+})();
+// 估算 token：ASCII≈1/字，中文≈2/字（保守）。⚠️【关键修复】图片 base64 按固定 1200 token 计，
+// 否则每次重发的 ~60 万字符 base64 会把估算撑爆 → 每轮误触发裁剪 → 模型每轮失忆重新审题！
+function estTokens(obj) {
+  if (Array.isArray(obj)) {
+    var total = 0;
+    obj.forEach(function (msg) {
+      var c = msg && msg.content;
+      if (Array.isArray(c)) {
+        c.forEach(function (part) {
+          if (part && part.type === 'image_url') total += 1200; // 图像固定估算，不看 base64 长度
+          else total += estStr((part && part.text) || '');
+        });
+      } else {
+        total += estStr(c || '');
+      }
+      if (msg.tool_calls) total += estStr(JSON.stringify(msg.tool_calls));
+    });
+    return total;
+  }
+  return estStr(JSON.stringify(obj));
+}
+function estStr(s) {
+  var ascii = 0, cjk = 0;
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charCodeAt(i);
+    if (c < 128) ascii++; else cjk++;
+  }
+  return ascii + cjk * 2;
+}
+// 裁剪：删除最旧的"完整轮"（第一个 user 之后的 assistant+tool 组），直到估算 ≤ 预算
+function compressConversation(messages, budget) {
+  var keep = messages.slice();
+  // 保底：至少留下 system + 最近一个完整轮（user/assistant/tool…），避免失题
+  while (estTokens(keep) > budget && keep.length > 4) {
+    // 找第一个可删完整轮：第一个 role==='tool' 及其前的 assistant(tool_calls)+user
+    var startIdx = -1;
+    for (var i = 2; i < keep.length; i++) {
+      if (keep[i].role === 'tool') { startIdx = i - 1; break; }
+    }
+    if (startIdx <= 1) break; // 只剩 system+第一轮，不再删
+    var endIdx = startIdx;
+    while (endIdx + 1 < keep.length && keep[endIdx + 1].role === 'tool') endIdx++;
+    var delFrom = startIdx;
+    if (keep[delFrom - 1] && keep[delFrom - 1].role === 'user') delFrom--;
+    keep = keep.slice(0, delFrom).concat(keep.slice(endIdx + 1));
+  }
+  return keep;
+}
+
+// ── 4.8 DSH 式会话管理（照搬 @deepseek-ai/dsh-compaction-basic + tool-result-pruner 策略）──────
+// 已扒 DSH 源码要点（dsh/node_modules/@deepseek-ai/dsh-compaction-basic/lib/index.js 等）：
+//   ① 压力触发：每步前 tokenMeter 测量 ≥ floor(window×0.8)（thresholdRatio）才压缩；
+//   ② 范围选择：头锚定——从最新节点倒数累加 tokens ≥ floor(window×0.16)（retainRatio）处分界；
+//      边界绝不拆 assistant(tool_calls)↔tool 结果对（toolPairingBalancedBefore 前移）；
+//   ③ 总结：复用对话自身 system+tools 前缀 + 压缩指令作最后 user 消息（KV 缓存复用），
+//      输出 <compacted-summary> 固定 8 节结构；收敛校验：摘要 ≥ 被替换 token → 拒收；
+//   ④ 提交：用一条 user 消息（preamble+summary）替换 [头..keepFrom-1] 区间；
+//   ⑤ 工具结果修剪（确定性、无 LLM）：>8192 字符 → 保留头 4096 + 尾 1024，中间替换标记；
+//   ⑥ 溢出恢复：400/413 → 先修剪 → retainTokens=0 强制压缩 → 重试 1 次（maxOverflowRetries=1）；
+//   ⑦ 失败不打断：压缩失败仅提示，继续本轮。
+var COMPACT_THRESHOLD_RATIO = 0.8;   // DSH DEFAULT_THRESHOLD_RATIO
+var COMPACT_RETAIN_RATIO    = 0.16;  // DSH DEFAULT_RETAIN_RATIO
+var COMPACT_MAX_TOKENS      = 8192;  // DSH maxTokens（摘要输出上限）
+var COMPACT_RETRIES         = 1;     // DSH compactionRetries
+var PRUNE_THRESHOLD_CHARS   = 8192;  // DSH thresholdChars
+var PRUNE_HEAD_CHARS        = 4096;  // DSH headChars
+var PRUNE_TAIL_CHARS        = 1024;  // DSH tailChars
+var PRUNE_MARKER            = "\n\n[... tool result middle pruned ...]\n\n";
+var SUMMARY_OPEN_TAG  = '<compacted-summary>';
+var SUMMARY_CLOSE_TAG = '</compacted-summary>';
+var CHECKPOINT_PREAMBLE = 'This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.';
+// DSH 压缩指令（8 节固定结构；作为最后一条 user 消息跟在对话前缀后，复用 KV 缓存）
+var COMPACTION_INSTRUCTION = [
+  '你现在的身份是这段对话的「压缩引擎」。把上面的对话压缩成一份结构化的检查点，让另一个模型能够零损失地继续这项工作。',
+  '',
+  '严格输出下面的 Markdown 结构：每个小节都保留、顺序不变；用短句要点而非长段落；空小节写"（无）"，绝不删除小节。',
+  '',
+  '## 主要请求与意图 Primary Request and Intent',
+  '- [用户最初的与演进中的目标；关键措辞原样引用]',
+  '',
+  '## 关键技术概念 Key Technical Concepts',
+  '- [在用的技术/框架/模式/约定]',
+  '',
+  '## 文件与代码 Files and Code',
+  '- [精确路径：为什么重要、关键改动或片段]',
+  '',
+  '## 错误与修复 Errors and Fixes',
+  '- [错误：如何解决，以及相关的用户反馈]',
+  '',
+  '## 待办任务 Pending Jobs',
+  '- [明确要求但尚未完成的工作]',
+  '',
+  '## 当前工作 Current Work',
+  '- [检查点生成时正在进行的进展]',
+  '',
+  '## 下一步 Next Step',
+  '- [与最近一个请求直接对应的唯一下一步动作，或"（无）"]',
+  '',
+  '## 关键上下文 Critical Context',
+  '- [决策及其理由、约束、用户偏好、开放问题、继续工作所需的数据]',
+  '',
+  '规则：',
+  '- 用简洁的中文工程化语言；精确保留数学式子、数值、命令与关键标识符。',
+  '- 忠实记录用户的反馈与明确指令，尤其是纠正性意见。',
+  '- 不要提及本次压缩请求，也不要提上下文被压缩过。',
+  '- 只输出检查点文本：不要调用任何工具，不做其他动作。',
+  '- 若对话中已含 ' + SUMMARY_OPEN_TAG + ' 块，那是先前检查点：不要原样照搬——保留仍然成立的事实、丢弃过时的内容、把更新的信息合并进同一结构的单一整合摘要。'
+].join('\n');
+
+function cpLen(s) { return Array.from(String(s == null ? '' : s)).length; }
+// 单消息 token 估算（与 estTokens 的数组口径一致：图片固定 1200，绝不碰 base64 长度）
+function estMsg(msg) {
+  if (!msg) return 0;
+  var c = msg.content;
+  var t = 0;
+  if (Array.isArray(c)) {
+    for (var i = 0; i < c.length; i++) {
+      var part = c[i];
+      if (part && part.type === 'image_url') t += 1200;
+      else t += estStr((part && part.text) || '');
+    }
+  } else {
+    t += estStr(c || '');
+  }
+  if (msg.tool_calls) t += estStr(JSON.stringify(msg.tool_calls));
+  return t;
+}
+
+// ⑤ 工具结果修剪：单条文本 → 头/尾保留 + 中间标记（按 Unicode 码点，不拆代理对）
+function pruneToolText(text) {
+  var pts = Array.from(String(text));
+  if (pts.length <= PRUNE_THRESHOLD_CHARS) return null;
+  return pts.slice(0, PRUNE_HEAD_CHARS).join('') + PRUNE_MARKER + pts.slice(pts.length - PRUNE_TAIL_CHARS).join('');
+}
+// JSON 感知：能解析的对象修剪其大字符串字段（保持可解析、可回显）；否则整段按文本切片
+function pruneToolResultMsg(msg) {
+  if (!msg || msg.role !== 'tool' || typeof msg.content !== 'string') return null;
+  var newC = null;
+  try {
+    var j = JSON.parse(msg.content);
+    if (j && typeof j === 'object' && !Array.isArray(j)) {
+      var changed = false;
+      for (var k in j) {
+        if (Object.prototype.hasOwnProperty.call(j, k) && typeof j[k] === 'string') {
+          var p = pruneToolText(j[k]);
+          if (p !== null) { j[k] = p; changed = true; }
+        }
+      }
+      if (changed) newC = JSON.stringify(j);
+    }
+  } catch (e) { /* 非 JSON → 整段文本修剪 */ }
+  if (newC === null) newC = pruneToolText(msg.content);
+  if (newC === null) return null;
+  var m = Object.assign({}, msg);
+  m.content = newC;
+  return m;
+}
+// ⑤b 整轮确定性修剪（DSH pruneSession 等价：无 LLM、可重放、仅替换 content）
+function pruneSessionToolResults(msgs) {
+  var changed = false, pruned = 0, savedChars = 0;
+  var out = msgs.map(function (m) {
+    var p = pruneToolResultMsg(m);
+    if (p === null) return m;
+    changed = true; pruned++;
+    savedChars += cpLen(m.content) - cpLen(p.content);
+    return p;
+  });
+  return changed ? { msgs: out, pruned: pruned, savedChars: savedChars } : null;
+}
+// 固定首条 user 消息（题目原文+题图）永不压缩——几何题失图=灾难（高于 DSH 的本地增强）
+function pinnedUserIdx(msgs) {
+  for (var i = 1; i < msgs.length; i++) {
+    if (msgs[i] && msgs[i].role === 'user') return i;
+  }
+  return 0;
+}
+// ② 范围选择（DSH selectCompactableRange 等价）：头锚定 + 不拆 tool 对
+function selectCompactableRange(msgs, retainTokens) {
+  var pin = pinnedUserIdx(msgs);
+  var head = pin + 1;
+  if (head >= msgs.length) return null;
+  var acc = 0, keepFrom = msgs.length;
+  for (var i = msgs.length - 1; i >= head; i--) {
+    acc += estMsg(msgs[i]);
+    keepFrom = i;
+    if (acc >= retainTokens) break;
+  }
+  // 边界平衡：保留区若以 tool 结果开头，会拆散它与 assistant(tool_calls) 的配对 → 前移（DSH toolPairingBalancedBefore）
+  while (keepFrom > head && msgs[keepFrom] && msgs[keepFrom].role === 'tool') keepFrom--;
+  if (keepFrom <= head) return null;
+  var end = keepFrom - 1;
+  if (end < head) return null;
+  return { head: head, end: end, keepFrom: keepFrom, shadowed: msgs.slice(head, keepFrom) };
+}
+// ③ 摘要调用（DSH summarizeWithLlm 等价：system+tools 前缀复用 + 指令作最后 user 消息）
+function stripImageParts(m) {
+  if (!m || !Array.isArray(m.content)) return m;
+  var out = Object.assign({}, m);
+  out.content = m.content.map(function (p) {
+    return (p && p.type === 'image_url') ? { type: 'text', text: '[题目图片]' } : p;
+  });
+  return out;
+}
+function summarizeForCompaction(msgs, sel) {
+  var cfg = getConfig();
+  var url = buildRequestUrl(cfg);
+  var ctrl = new AbortController();
+  var timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 120000);
+  function fireReq(b) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apikey },
+      body: JSON.stringify(b),
+      signal: ctrl.signal
+    }).then(function (r) {
+      if (!r.ok) {
+        // 思考控制参数不被支持（400）→ 去掉后重试一次
+        if (r.status === 400 && (b.reasoning_effort || b.enable_thinking !== undefined)) {
+          var b2 = Object.assign({}, b);
+          delete b2.reasoning_effort;
+          delete b2.enable_thinking;
+          return fireReq(b2);
+        }
+        throw new Error('compaction API ' + r.status);
+      }
+      return r.json();
+    });
+  }
+  var body = (function () {
+    var region = [];
+    for (var i = sel.head; i < sel.keepFrom; i++) region.push(stripImageParts(msgs[i]));
+    var cfg2 = getConfig();
+    var b = {
+      model: cfg2.model,
+      messages: [
+        { role: 'system', content: (msgs[0] && msgs[0].content) || '' }
+      ].concat(region, [{ role: 'user', content: COMPACTION_INSTRUCTION }]),
+      temperature: 0.2,
+      max_tokens: COMPACT_MAX_TOKENS,
+      reasoning_effort: 'low',
+      stream: false
+    };
+    if (cfg2.protocol === 'dashscope') b.enable_thinking = false;
+    return b;
+  })();
+  return fireReq(body).then(function (j) {
+    clearTimeout(timer);
+    var text = ((j.choices && j.choices[0] && j.choices[0].message) || {}).content || '';
+    if (!text.trim()) throw new Error('compaction: 摘要文本为空');
+    return text;
+  }, function (e) {
+    clearTimeout(timer);
+    throw e;
+  });
+}
+// ④ 组装检查点消息 + 收敛校验（DSH frameSummary/summarizeCompaction 等价）
+function buildCheckpointMessage(text) {
+  return {
+    role: 'user',
+    content: [
+      { type: 'text', text: CHECKPOINT_PREAMBLE + '\n\n' + SUMMARY_OPEN_TAG + '\n\n' + text + '\n\n' + SUMMARY_CLOSE_TAG }
+    ]
+  };
+}
+// 一次压缩事务：总结 → 收敛校验（摘要必须更小，否则拒收）→ 区间替换为一条检查点 user 消息
+async function applyOneCompaction(msgs, sel) {
+  var text = await summarizeForCompaction(msgs, sel);
+  var chk = buildCheckpointMessage(text);
+  var shadowedTokens = estTokens(sel.shadowed);
+  var chkTokens = estMsg(chk);
+  if (chkTokens >= shadowedTokens) throw new Error('摘要不小于被替换内容（' + chkTokens + ' >= ' + shadowedTokens + '），拒绝提交（DSH 收敛校验）');
+  var newMsgs = msgs.slice(0, sel.head).concat([chk], msgs.slice(sel.keepFrom));
+  return { msgs: newMsgs, shadowed: sel.shadowed.length, shadowedTokens: shadowedTokens, chkTokens: chkTokens };
+}
+// ① 压力压缩主流程（DSH BasicCompactionEngine.compactIfNeeded 等价；失败抛错由调用方吞掉继续本轮）
+async function compactSession(msgs, budget) {
+  var thresholdTokens = Math.floor(budget * COMPACT_THRESHOLD_RATIO);
+  var retainTokens = Math.floor(budget * COMPACT_RETAIN_RATIO);
+  var result = null;
+  var measurement = estTokens(msgs);
+  if (measurement < thresholdTokens) return null;
+  for (var attempt = 0; attempt <= COMPACT_RETRIES; attempt++) {
+    var sel = selectCompactableRange(msgs, retainTokens);
+    if (sel === null) return result === null ? null : result;
+    result = await applyOneCompaction(msgs, sel);
+    msgs = result.msgs;
+    measurement = estTokens(msgs);
+    if (measurement < thresholdTokens) return result;
+  }
+  throw new Error('压缩后仍高于阈值（' + Math.round(measurement / 1000) + 'k >= ' + Math.round(thresholdTokens / 1000) + 'k，共 ' + (COMPACT_RETRIES + 1) + ' 次）');
+}
+// ⑥ 溢出恢复（DSH agent/request-error 等价）：修剪 → retainTokens=0 强制压缩；失败保留已修剪结果
+async function repairForOverflow(msgs, budget) {
+  var outcome = { msgs: msgs, prunedCount: 0, compacted: 0 };
+  var pr = pruneSessionToolResults(msgs);
+  if (pr) { outcome.msgs = pr.msgs; outcome.prunedCount = pr.pruned; }
+  var sel = selectCompactableRange(outcome.msgs, 0);
+  if (sel === null) return outcome;
+  try {
+    var stats = await applyOneCompaction(outcome.msgs, sel);
+    outcome.msgs = stats.msgs;
+    outcome.compacted = stats.shadowed;
+  } catch (e) {
+    // 压缩失败 → 保留已修剪结果；调用方兜底裁减
+  }
+  return outcome;
+}
+
+// ── 4.9 DSH 式工具结果呈现 + 执行后审计（照搬 dsh-llm tool-result/isError 设计）──────
+// DSH 对齐点：① tool-result 是结构化消息（isError 机器可读），wire 层 text 化时带状态；
+// ② 失败结果带语义引导（interruptedTurnClosers："结果未知，决定是否重试"同思路）；
+// ③ 空结果兜底 "(no output)"；④ 审计裁决代替纯提示词威慑（agent-loop pre-step 决策钩子同思路）。
+// 计算痕迹检测：思考块出现"实际运算"特征 → 禁止脑内算（SYSTEM_PROMPT 硬规则）
+function calcTraceCheck(text) {
+  return /≈\s*[-+]?[\d.]+|×\s*\d|\d\s*×|÷|√\s*\d+|\^[0-9]|\d\s*²|化简|展开|代入|解得|解出|求解|求根|通分|配方|=\s*\(/.test(text);
+}
+// 从 ggb_query 结果提取可引用键（多字符对象名；带小数点的数值），供"引用检测"
+function extractQueryRefs(resultText) {
+  var qn = [], qv = [];
+  String(resultText || '').split('；').forEach(function (kv) {
+    var eq = kv.indexOf('=');
+    if (eq <= 0) return;
+    var k = kv.slice(0, eq).trim(), v = kv.slice(eq + 1).trim();
+    if (k.length >= 2) qn.push(k);
+    if (/^[-+]?\d+(\.\d+)+$/.test(v) && v.length >= 4) qv.push(v);
+  });
+  return { names: qn, values: qv };
+}
+// 工具结果 wire 文本（DSH createToolResultMessage + 失败引导）
+function formatToolResult(name, out) {
+  var text = out.result ? String(out.result) : '';
+  if (!text.trim()) text = out.ok ? '(no output)' : '(no output)';
+  var content = out.ok ? '✓ ' + text : '✗ 失败：' + text;
+  if (!out.ok && text) {
+    var m = /([A-Za-z]\w*)\s*未定义/.exec(text);
+    if (m) content += '；→ 修复引导：先用 ggb_query {"names":"' + m[1] + '","mode":"defined"} 确认对象是否真的缺失，再检查命令写法与依赖（Ellipse/Line/Point 等是命令关键字：先 e1=Ellipse(A,B,C) 定义对象，再 Intersect(l1,e1)）';
+    else if (/表达式|语法/.test(text)) content += '；→ 请检查表达式语法/变量名后重试 student_calc/student_solve';
+    else if (/缺少\s*command|缺少\s*names/.test(text)) content += '；→ 请补全参数后重试（ggb_eval 必须带 command，ggb_query 必须带 names）';
+  }
+  return content;
+}
+// 未修复失败清单更新：未定义对象登记；成功定义同名对象 / 查询确认存在 → 清除
+function updateOpenFailures(list, roundAudit) {
+  var out = list.slice();
+  roundAudit.forEach(function (ra) {
+    var um = /([A-Za-z]\w*)\s*未定义/.exec(ra.result);
+    if (!ra.ok && um && !out.some(function (f) { return f.name === um[1]; })) out.push({ name: um[1] });
+    if (ra.ok && ra.name === 'ggb_eval') {
+      var dm = /^\s*([A-Za-z]\w*)\s*=/.exec(ra.cmd || '');
+      if (dm) out = out.filter(function (f) { return f.name !== dm[1]; });
+    }
+    if (ra.ok && ra.name === 'ggb_query') {
+      out = out.filter(function (f) { return !new RegExp('(^|[^A-Za-z0-9_])' + f.name + '=(?!未定义)').test(String(ra.result || '')); });
+    }
+  });
+  return out;
+}
+// 审计决策（纯函数）：返回 {calcMsg, queryMsg, redunMsg, canvasMsg}，循环内只负责注入与 continue
+function auditDecide(roundAudit, thinkText, hasCalc, hasQueryNow, prevQueryRefs, definedObjects, canvasSnap) {
+  var out = { calcMsg: null, queryMsg: null, redunMsg: null, canvasMsg: null };
+  if (calcTraceCheck(thinkText) && !hasCalc) {
+    var evm = thinkText.match(/((.{0,24}(≈|×|÷|√|\^|²|化简|展开|代入|解得|求根)[^\n]{0,24}).{0,80})/);
+    var ev = evm ? evm[1].replace(/\s+/g, ' ').trim().slice(0, 90) : '';
+    out.calcMsg = {
+      evidence: ev,
+      mild: '「执行后审计·草稿纸」你本轮思考里出现了计算（' + ev + '），但没有调用 student_calc/student_solve。请把这步运算交给草稿纸（student_calc 化简/展开/代入，student_solve 解方程）拿到精确手算结果（√5 保留 √5）后再继续，不要脑内完成。',
+      strong: '「执行后审计·草稿纸」你已经连续多轮在思考里直接运算（' + ev + '）却没有调用学生草稿纸（student_calc/student_solve）。规则不是建议：**思考块禁止出现实际代数运算**，凡是算式必须交给草稿纸拿精确结果，拿到结果再继续。请现在把这步运算转成 student_calc/student_solve 调用；若下一轮仍无草稿纸调用，本裁决会持续出现。'
+    };
+  }
+  if (!hasQueryNow && prevQueryRefs && prevQueryRefs.names.length && thinkText) {
+    var refHit = prevQueryRefs.names.some(function (n) { return thinkText.indexOf(n) !== -1; }) ||
+                 prevQueryRefs.values.some(function (v) { return thinkText.indexOf(v) !== -1; });
+    if (!refHit) {
+      out.queryMsg = '「执行后审计·查询」你上一轮用 ggb_query 读到了关键量（' + prevQueryRefs.names.slice(0, 4).join('、') + '），但本轮推理完全没有引用它们——查询不是仪式，数据是下一步推导的证据。请：① 把查询值写进推理（"由画布读出 ' + (prevQueryRefs.values[0] || '…') + '，与定理结论相符…"）；② 或解释为何不需要该数据；③ 若上轮查的不是要害对象，先 ggb_query 换关键量再推。';
+    }
+  }
+  // 重复定义检测（跨轮重发同一构造命令 = 空转；画布保留上一轮的一切）
+  var dupNames = [];
+  roundAudit.forEach(function (ra) {
+    if (!ra.ok || ra.name !== 'ggb_eval') return;
+    var m = /^\s*([A-Za-z]\w*)\s*=/.exec(ra.cmd || '');
+    if (m && (definedObjects[m[1]] === true || dupNames.indexOf(m[1]) !== -1)) dupNames.push(m[1]);
+  });
+  if (dupNames.length) {
+    out.redunMsg = '「执行后审计·画布」你重复定义了已经存在的对象：' + dupNames.join('、') + '——画布不是每轮重建的，上一轮已定义的对象保留原样，重复定义=空转。请：① 先 ggb_query {"names":"…","mode":"defined"} 查画布现状；② 只构造**缺失**的部分。';
+  }
+  // 缺边检测（顶点齐了但图形没连起来 → 题图结构未成型）
+  if (canvasSnap && canvasSnap.pts >= 3 && canvasSnap.sides === 0 && canvasSnap.polys === 0 &&
+      roundAudit.some(function (ra) { return ra.ok && ra.name === 'ggb_eval'; })) {
+    out.canvasMsg = '「执行后审计·画布」画布上已有 ' + canvasSnap.pts + ' 个点（' + (dupNames.length ? '其中 ' + dupNames.join('、') + ' 是重复定义' : '）') + '，但没有线段/多边形——图形没有连起来，题图结构尚未成型。请用 Polygon(A,B,C,D) 把正方形画出（或 Segment：AB=Segment(A,B)；BC=Segment(B,C)；CD=Segment(C,D)；DA=Segment(D,A)），再继续推理。';
+  }
+  // 矛盾纠结检测：验证发现"不成立"后又重读/再试/质疑题目 → 定理退化=特定解，直接反推隐含前提（用户要求：不要纠结泛化）
+  if (!out.redunMsg && !out.canvasMsg) {
+    var hasSolveNow = roundAudit.some(function (ra) { return ra.ok && ra.name === 'student_solve'; });
+    if (!hasSolveNow && !/隐含|反推|解得|唯一|约束方程/.test(thinkText)) {
+      var cM = thinkText.match(/(.{0,28}(不成立|不相等|不等于|≠|矛盾|不一致|对不上)[^\n]{0,40})/);
+      if (cM && /(重新|再(读|看|算|试|检查|审视)|奇怪|哪里|难道|是不是|题目(有|缺|错|误)|质疑|为何|为什么|让我再)/.test(thinkText)) {
+        var cE = cM[1].replace(/\s+/g, ' ').trim().slice(0, 72);
+        out.tangleMsg = '「执行后审计·特定解」你验证后发现"结论对一般位置不成立"（' + cE + '），又回到重新读题/再试/质疑题目——**定理退化不是题目错误，这正是特定解题**：结论只在一个特定位置成立。请立刻把"结论成立"写成约束方程（如 |CE|=|CF|），用 student_solve 精确解出该位置（隐含前提），写进 question 与 conditionSource（注明"由结论反推"），然后按该特定构型用定理（全等/相似/勾股/特殊角）完成证明并输出 JSON。禁止再验证一般位置，禁止重读题目。';
+      }
+    }
+  }
+  return out;
+}
+// 画布真实状态快照（浏览器直读 GGB：点数/线段数/多边形数）——缺边/重复检测用
+function canvasSnapshot() {
+  var api = ggbApi;
+  if (!api || typeof api.getAllObjectNames !== 'function') return null;
+  try {
+    var names = api.getAllObjectNames();
+    var pts = 0, sides = 0, polys = 0;
+    for (var i = 0; i < names.length; i++) {
+      var t = '';
+      try { t = typeof api.getObjectType === 'function' ? api.getObjectType(names[i]) : ''; } catch (e) {}
+      if (t === 'point') pts++;
+      else if (t === 'segment' || t === 'line') sides++;
+      else if (t === 'polygon') polys++;
+    }
+    return { pts: pts, sides: sides, polys: polys };
+  } catch (e) { return null; }
+}
+
+// 轻量分类调用（非流式、短回答、严格 JSON；失败返回 null → 用综合降级）
+function classifyStage(text, hasImage) {
+  // ① 优先用「学段定性专用通道」（轻量模型，如百炼 qwen → 秒级）；② 无则用主配置；
+  // ③ 一律带 20s 超时（AbortController），超时/失败/推理型模型 → 返回 null 用综合降级，绝不阻塞解题。
+  var stageBase = document.getElementById('stage-baseurl').value.trim();
+  var stageKey = document.getElementById('stage-apikey').value.trim();
+  var stageModel = document.getElementById('stage-model').value.trim();
+  var cfg = getConfig();
+  var useStage = stageBase && stageKey && stageModel;
+  var baseurl = useStage ? stageBase : cfg.baseurl;
+  var key = useStage ? stageKey : cfg.apikey;
+  var model = useStage ? stageModel : cfg.model;
+  if (!key) return Promise.resolve(null);
+  // 推理型模型不适合定性（思考 1-2 分钟 + max_tokens 被吃光）——超时兜底
+  var isReasoner = /vision-exp|reasoner|r1|think/i.test(model);
+  var ctrl = new AbortController();
+  var timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 20000);
+  var userContent = { type: 'text', text: (text || '请直接看图中的题目内容判断') + (hasImage ? '（附带题目图片，请重点看图片）' : '') };
+  var userMsg = { role: 'user', content: [ userContent ] };
+  if (hasImage && currentImage) {
+    userMsg.content.unshift({ type: 'image_url', image_url: { url: currentImage } });
+  }
+  var body = {
+    model: model,
+    messages: [
+      { role: 'system', content: '你是数学题目定级专家。判断题目所属学段与学科，只输出严格 JSON：{"stage":"zhongxiao|gaozhong|daxue|jingsai|zonghe","subject":"学科/领域","reason":"一句话判断理由"}。判断规则：小学/初中含几何证明、因式分解、一次函数等→zhongxiao；圆锥曲线/函数导数/三角数列/向量/立体几何→gaozhong；微积分/线代/概率统计/复分析等→daxue；明显竞赛风格（数论/组合/构造技巧）→jingsai；无法确定→zonghe。不要输出 JSON 以外内容。' },
+      userMsg
+    ],
+    temperature: 0,
+    max_tokens: 200,
+    stream: false
+  };
+  var url = useStage
+    ? (/chat\/completions$/.test(baseurl) ? baseurl : baseurl.replace(/\/+$/, '') + '/chat/completions')
+    : buildRequestUrl(cfg);
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+    body: JSON.stringify(body),
+    signal: ctrl.signal
+  }).then(function (r) {
+    if (!r.ok) { r.text().catch(function () {}); return null; }
+    return r.json().then(function (j) {
+      var c = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+      if (!c) return null;
+      var t = c.replace(/```(?:json)?\s*([\s\S]*?)```/, '$1');
+      var s = t.indexOf('{'), e = t.lastIndexOf('}');
+      if (s === -1 || e === -1) return null;
+      var o = JSON.parse(t.slice(s, e + 1));
+      var stage = STAGE_PROMPTS[o.stage] ? o.stage : 'zonghe';
+      return { stage: stage, subject: o.subject || '', reason: o.reason || '' };
+    }).catch(function () { return null; });
+  }).catch(function () { return null; }).finally(function () {
+    clearTimeout(timer);
+  });
+}
+
+// ── 5. 聊天渲染 ─────────────────────────────────────────────
+var chatScroll = document.getElementById('chat-scroll');
+var autoScroll = true;
+chatScroll.addEventListener('scroll', function () {
+  autoScroll = (chatScroll.scrollTop + chatScroll.clientHeight >= chatScroll.scrollHeight - 140);
+});
+function scrollBottom(force) {
+  if (force || autoScroll) { chatScroll.scrollTop = chatScroll.scrollHeight; }
+}
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function addSys(text, isErr) {
+  var d = document.createElement('div');
+  d.className = 'msg sys' + (isErr ? ' err' : '');
+  d.textContent = text;
+  chatScroll.appendChild(d);
+  scrollBottom();
+  return d;
+}
+function addErr(text) { return addSys(text, true); }
+function addUser(text) {
+  var d = document.createElement('div');
+  d.className = 'msg user';
+  if (currentImage) {
+    var im = document.createElement('img');
+    im.className = 'm-img';
+    im.src = currentImage;
+    d.appendChild(im);
+  }
+  if (text) {
+    var span = document.createElement('span');
+    span.textContent = text;
+    d.appendChild(span);
+  }
+  chatScroll.appendChild(d);
+  scrollBottom();
+  return d;
+}
+// 创建 AI 消息容器，返回操作句柄
+function beginAssistant() {
+  var wrap = document.createElement('div');
+  wrap.className = 'msg assistant';
+  chatScroll.appendChild(wrap);
+  var h = {
+    wrap: wrap,
+    thinkBody: null, thinkWrap: null, thinkDone: false,
+    answerEl: null, answerGotText: false,
+    toolCards: {} // id -> {wrap, statusEl, argsEl, resultEl}
+  };
+  function ensureThink() {
+    if (h.thinkWrap) return;
+    var t = document.createElement('div');
+    t.className = 'think';
+    var head = document.createElement('div');
+    head.className = 'think-head';
+    head.innerHTML = '<span>💭 思考 <b class="think-rnd" style="color:var(--accent)">第 1 轮</b></span><span class="togg">收起 ▾</span>';
+    var body = document.createElement('div');
+    body.className = 'think-body';
+    t.appendChild(head); t.appendChild(body);
+    wrap.appendChild(t);
+    h.thinkWrap = t; h.thinkBody = body;
+    head.addEventListener('click', function () {
+      var collapsed = body.style.display === 'none';
+      body.style.display = collapsed ? '' : 'none';
+      head.querySelector('.togg').textContent = collapsed ? '收起 ▾' : '展开 ▸';
+    });
+    scrollBottom();
+  }
+  function finishThink() {
+    if (h.thinkDone || !h.thinkWrap) { h.thinkDone = true; return; }
+    h.thinkDone = true;
+    h.thinkWrap.querySelector('.togg').textContent = '展开 ▸（思考完成）';
+    // 思考较长时默认折叠，保持回答流整洁（新轮次 beginRound 会自动展开，不会吞后续思考）
+    if (h.thinkBody && h.thinkBody.textContent.length > 400) h.thinkBody.style.display = 'none';
+  }
+  // 每轮开始：自动展开思考块 + 标注第 N 轮（解决“思考被吞、看起来卡死”的问题）
+  function beginRound(n) {
+    h.thinkDone = false;
+    if (!h.thinkWrap) { ensureThink(); }
+    if (h.thinkBody) h.thinkBody.style.display = '';
+    var rnd = h.thinkWrap.querySelector('.think-rnd');
+    if (rnd) rnd.textContent = '第 ' + n + ' 轮';
+    var togg = h.thinkWrap.querySelector('.togg');
+    if (togg) togg.textContent = '收起 ▾';
+  }
+  function ensureAnswer() {
+    if (h.answerEl) return;
+    finishThink();
+    var a = document.createElement('div');
+    a.className = 'answer';
+    a.innerHTML = '<div class="a-live"></div>';
+    wrap.appendChild(a);
+    h.answerWrap = a;
+    h.answerEl = a.querySelector('.a-live');
+    scrollBottom();
+  }
+  // 工具卡片按【增量序号】键控（流式 tool_calls 同一条只有首块带 id，后续块只有 index）——避免增量块重复建卡
+  function ensureToolCard(idx) {
+    var key = 'i' + idx;
+    if (h.toolCards[key]) return h.toolCards[key];
+    var card = document.createElement('div');
+    card.className = 'toolcard';
+    card.innerHTML =
+      '<div class="tc-head">🔧 <b>tool…</b>' +
+      '<span class="tc-status run">构造中…</span></div>' +
+      '<pre class="tc-args"></pre>' +
+      '<div class="tc-result" style="display:none"></div>';
+    wrap.appendChild(card);
+    h.toolCards[key] = {
+      card: card,
+      statusEl: card.querySelector('.tc-status'),
+      argsEl: card.querySelector('.tc-args'),
+      resultEl: card.querySelector('.tc-result'),
+      nameEl: card.querySelector('.tc-head b')
+    };
+    scrollBottom();
+    return h.toolCards[key];
+  }
+  h.ensureThink = ensureThink; h.finishThink = finishThink; h.beginRound = beginRound;
+  h.ensureAnswer = ensureAnswer; h.ensureToolCard = ensureToolCard;
+  return h;
+}
+
+// ── 6. 流式 SSE 请求（OpenAI 兼容 /chat/completions）──────────
+function streamChat(messages, onDelta, opts) {
+  opts = opts || {};
+  return new Promise(function (resolve, reject) {
+    var cfg = getConfig();
+    if (!cfg.baseurl || !cfg.model) { reject(new Error('请先配置 API（右上角 ⚙ 设置）')); return; }
+    var url = buildRequestUrl(cfg);
+    var body = {
+      model: cfg.model,
+      messages: messages,
+      temperature: 0.2,
+      stream: true,
+      tools: TOOLS,
+      tool_choice: 'auto'
+    };
+    if (opts.jsonMode && cfg.jsonmode === 'json') body.response_format = { type: 'json_object' };
+    if (opts.maxTokens) body.max_tokens = opts.maxTokens;
+    // API 层思考控制（原生参数，非单纯 max_tokens 截断）：
+    //   reasoning_effort: OpenAI/DeepSeek/百炼兼容模式都实测支持（low/medium/high）
+    //   enable_thinking: 百炼 qwen 专用（off 档可关闭思考）；OpenAI 直连不传（避免未知参数）
+    body.reasoning_effort = opts.reasoningEffort || 'medium';
+    if (opts.noThinking && cfg.protocol === 'dashscope') body.enable_thinking = false;
+    else if (cfg.protocol === 'dashscope' && opts.reasoningEffort) body.enable_thinking = true;
+    var unknownParamRetried = false; // API 不支持某参数时降级重试一次（去掉全部思考控制参数）
+    var ctxRetried = false;          // 上下文超限时压缩重试一次
+    var reasoningRetried = false;    // reasoning_content 回传不被支持时降级重试一次（并全局关闭回传）
+    function doFetch(b) {
+      return fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apikey },
+        body: JSON.stringify(b),
+        signal: opts.signal || undefined
+      });
+    }
+    doFetch(body).then(function (r) {
+      if (!r.ok) {
+        return r.text().then(function (t) {
+          // json_object 不支持时（400/404）自动降级重试一次
+          if (body.response_format && (r.status === 400 || r.status === 404)) {
+            var b2 = JSON.parse(JSON.stringify(body));
+            delete b2.response_format;
+            onDelta && onDelta({ sys: 'json_object 不支持，降级为普通文本重试一次' });
+            return doFetch(b2).then(function (r2) {
+              if (!r2.ok) return r2.text().then(function (t2) { throw new Error('API ' + r2.status + ': ' + t2.slice(0, 400)); });
+              return r2;
+            });
+          }
+          // 思考控制参数不被支持时（400）降级：去掉 reasoning_effort/enable_thinking 重试一次
+          if ((r.status === 400) && (body.reasoning_effort || body.enable_thinking !== undefined) && !unknownParamRetried) {
+            unknownParamRetried = true;
+            var b3 = JSON.parse(JSON.stringify(body));
+            delete b3.reasoning_effort;
+            delete b3.enable_thinking;
+            onDelta && onDelta({ sys: '思考强度参数不被该 API 支持，降级重试一次' });
+            return doFetch(b3).then(function (r3) {
+              if (!r3.ok) return r3.text().then(function (t3) { throw new Error('API ' + r3.status + ': ' + t3.slice(0, 400)); });
+              return r3;
+            });
+          }
+          // reasoning_content 回传不被支持（400 且提示 reasoning）→ 去掉全部回传重试一次，并全局关闭（后续轮不再带）
+          if ((r.status === 400) && /reasoning/i.test(t) && !reasoningRetried && hasReasoningInMessages(body.messages)) {
+            reasoningRetried = true;
+            reasoningReturnOK = false;
+            var b6 = JSON.parse(JSON.stringify(body));
+            b6.messages = stripReasoningFromMessages(b6.messages);
+            onDelta && onDelta({ sys: '该 API 不支持 reasoning_content 回传，已关闭思考链回传（不影响正常推理）' });
+            return doFetch(b6).then(function (r6) {
+              if (!r6.ok) return r6.text().then(function (t6) { throw new Error('API ' + r6.status + ': ' + t6.slice(0, 400)); });
+              return r6;
+            });
+          }
+          // 上下文超限（400/413 且提示 context/token 超长）→ DSH 式溢出恢复：修剪工具结果 → retain 0 强制压缩 → 重试一次
+          if ((r.status === 400 || r.status === 413) && !ctxRetried && /context|token|length|too (long|large)|exceed|max/i.test(t)) {
+            ctxRetried = true;
+            var b4 = JSON.parse(JSON.stringify(body));
+            return repairForOverflow(b4.messages, getCtxBudget()).then(function (rep) {
+              var parts = [];
+              if (rep.prunedCount) parts.push('修剪 ' + rep.prunedCount + ' 条超长工具结果');
+              if (rep.compacted) parts.push('生成压缩检查点（合并 ' + rep.compacted + ' 条旧消息）');
+              if (parts.length === 0) parts.push('未找到可压缩范围');
+              onDelta && onDelta({ sys: '上下文超出模型窗口 → DSH 溢出恢复：' + parts.join(' + ') + '，重试一次' });
+              b4.messages = rep.msgs;
+              opts.onRepaired && opts.onRepaired(rep.msgs);
+              // 兜底：压缩引擎未生效（无修剪无合并）→ 退化为裁剪最旧完整轮，保证重试能成功
+              if (rep.msgs === b4.messages) {
+                var trimmed = compressConversation(b4.messages, Math.floor(getCtxBudget() * 0.5));
+                if (trimmed.length < b4.messages.length) {
+                  b4.messages = trimmed;
+                  opts.onRepaired && opts.onRepaired(trimmed);
+                }
+              }
+              return doFetch(b4).then(function (r4) {
+                if (!r4.ok) return r4.text().then(function (t4) { throw new Error('API ' + r4.status + ': ' + t4.slice(0, 400)); });
+                return r4;
+              });
+            });
+          }
+          throw new Error('API ' + r.status + ': ' + t.slice(0, 400));
+        });
+      }
+      return r;
+    }).then(function (r) {
+      var acc = { content:'', toolCalls: [], finish: null, reasoning: '' };
+      var reader = r.body.getReader();
+      var decoder = new TextDecoder('utf-8');
+      var buf = '';
+      function handleEvent(line) {
+        if (line.indexOf('data:') !== 0) return;
+        var payload = line.slice(5).trim();
+        if (!payload || payload === '[DONE]') return;
+        var j;
+        try { j = JSON.parse(payload); } catch (e) { return; }
+        var ch = j.choices && j.choices[0];
+        if (!ch) return;
+        if (ch.finish_reason) acc.finish = ch.finish_reason;
+        var d = ch.delta || {};
+        if (d.content) { acc.content += d.content; onDelta && onDelta({ content: d.content }); }
+        if (d.reasoning_content) { acc.reasoning += d.reasoning_content; onDelta && onDelta({ reasoning: d.reasoning_content }); }
+        if (Array.isArray(d.tool_calls)) {
+          d.tool_calls.forEach(function (tc) {
+            var i = tc.index || 0;
+            if (!acc.toolCalls[i]) acc.toolCalls[i] = { id:'', name:'', arguments:'' };
+            if (tc.id) acc.toolCalls[i].id = tc.id;
+            if (tc.function) {
+              if (tc.function.name) acc.toolCalls[i].name = tc.function.name;
+              if (tc.function.arguments) acc.toolCalls[i].arguments += tc.function.arguments;
+            }
+            onDelta && onDelta({ toolDelta: tc, index: i });
+          });
+        }
+      }
+      function pump() {
+        return reader.read().then(function (res) {
+          if (res.done) {
+            // 尾块
+            if (buf.trim()) handleEvent(buf);
+            return;
+          }
+          buf += decoder.decode(res.value, { stream: true });
+          var parts = buf.split(/\r?\n\r?\n/);
+          buf = parts.pop();
+          parts.forEach(handleEvent);
+          return pump();
+        });
+      }
+      return pump().then(function () {
+        var tcs = acc.toolCalls.filter(Boolean).map(function (tc, i) {
+          if (!tc.id) tc.id = 'call_' + Date.now() + '_' + i;
+          // 保险：arguments 键恒为字符串（空则 '{}'），name 缺省 ggb_eval——防 API 侧 "missing field arguments"
+          var argsStr = (typeof tc.arguments === 'string' && tc.arguments) ? tc.arguments : '{}';
+          var name = tc.name || 'ggb_eval';
+          // 顶层也带 arguments 与 function.arguments 双份，防下游读取顶层 tc.arguments 时 undefined → JSON 丢键 → API 400 missing arguments
+          return { id: tc.id, name: name, type:'function', arguments: argsStr, function:{ name: name, arguments: argsStr } };
+        });
+        resolve({ content: acc.content, toolCalls: tcs, finishReason: acc.finish, reasoning: acc.reasoning });
+      });
+    }).catch(function (e) {
+      if (e && (e.name === 'AbortError' || /aborted/i.test(String(e.message || e)))) reject(new Error('aborted'));
+      else reject(e);
+    });
+  });
+}
+
+// ── 7. ReAct 主循环 ─────────────────────────────────────────
+var conversation = [];          // OpenAI messages（含图 + 工具往返）
+var ggbApi = null;
+var running = false;
+var abortCtrl = null;
+var lastJson = null;
+var reasoningReturnOK = true;   // DSH serializeAssistant 同款：assistant 消息回传 reasoning_content（模型能看到自己的上轮思考链 → 连续推理不从头来）；API 不支持时 400 自动关闭
+function hasReasoningInMessages(msgs) {
+  return (msgs || []).some(function (m) { return m && m.role === 'assistant' && !!m.reasoning_content; });
+}
+function stripReasoningFromMessages(msgs) {
+  return (msgs || []).map(function (m) {
+    if (m && m.role === 'assistant' && m.reasoning_content) {
+      var c = Object.assign({}, m);
+      delete c.reasoning_content;
+      return c;
+    }
+    return m;
+  });
+}
+
+function buildUserContent(text) {
+  // 有图 → 图像直传（模型直接看图，含图上文字与几何标记）；无图则纯文字
+  var parts = [];
+  if (text) parts.push(text);
+  if (!parts.length) parts.push(currentImage ? '请直接按图中题意解题（图片见下）' : '（未输入文字）');
+  var c = [{ type: 'text', text: parts.join('\n\n') }];
+  if (currentImage) c.unshift({ type: 'image_url', image_url: { url: currentImage } });
+  return c;
+}
+
+function formatArgs(argsStr) {
+  try { return JSON.stringify(JSON.parse(argsStr || '{}'), null, 1); } catch (e) { return argsStr; }
+}
+
+function setBusy(b) {
+  document.getElementById('btn-send').disabled = b;
+  document.getElementById('btn-demo').disabled = b;
+  document.getElementById('btn-upload').disabled = b;
+  document.getElementById('btn-stop').style.display = b ? 'inline-block' : 'none';
+}
+
+async function runReAct(text) {
+  if (running) return;
+  running = true;
+  reasoningReturnOK = true; // 每次运行重置：reasoning_content 回传默认开启，API 400 时自动关闭
+  abortCtrl = new AbortController();
+  setBusy(true);
+  var cfg = getConfig();
+  if (!cfg.baseurl || !cfg.model) { addErr('未配置 API：点右上角 ⚙ 设置（或点「载入内置演示」无 Key 体验）'); running = false; setBusy(false); return; }
+  if (!cfg.apikey) { addErr('未填 API Key（右上角 ⚙ 设置）'); running = false; setBusy(false); return; }
+
+  addUser(text);
+  // ── 学段定性 Agent：先判级（轻量非流式，失败降级综合不阻塞）──
+  var stageInfo = null;
+  var stageChip = addSys('🎓 正在定性题目学段（识别题目的知识范围）…');
+  try {
+    stageInfo = await classifyStage(text || (currentImage ? '（附题目图片）' : '按图示题目内容判断'));
+  } catch (e) {}
+  var stage = stageInfo ? stageInfo.stage : 'zonghe';
+  var stageSeg = STAGE_PROMPTS[stage];
+  stageChip.textContent = stageInfo
+    ? '🎓 学段定性：' + STAGE_LABELS[stage] + ' · ' + (stageInfo.subject || '数学') + '（' + stageInfo.reason + '）'
+    : '🎓 学段定性：未能自动识别，已按综合学段处理（可手动在输入里注明学段）';
+  // 题型模式：
+  //   图模式（特定解）：有题图 / 题干含"如图" / 出现几何结构词（正方形/三角形/圆/边/角/线段/顶点/对角线/平行/垂直等）
+  //   文本模式（泛化解）：无图且明显是代数/三角函数/数列恒等式类（求值/化简/恒等式/证明等式）
+  var hasFigureHint = !!(currentImage || /如图|如图示|如图所示/.test(text || ''));
+  var hasGeoWords = /正方形|三角形|平行四边|梯形|矩形|菱形|圆|半径|圆心|直径|弦|弧|线段|边[ABCFDEl]|顶点|对角线|平行|垂直|延长|交于|求证|证明/.test(text || '');
+  var solveMode = (hasFigureHint || hasGeoWords) ? 'specific' : 'general';
+  addSys(solveMode === 'specific'
+    ? '🖼 题型模式：图模式 · 特定解（以图为先，结论在指定构型下成立，禁止泛化解）'
+    : '📄 题型模式：文本模式 · 泛化解（对满足条件的情形成立，禁止虚构图形）');
+  scrollBottom(true);
+
+  var thinkLevel = getThinkLevel();
+  conversation = [
+    { role:'system', content: SYSTEM_PROMPT + '\n\n' + stageSeg + '\n\n' + thinkLevel.prompt },
+    { role:'user', content: buildUserContent(text) }
+  ];
+  var currentAsst = null; // 当前轮消息容器（每轮新建，DSH 式：思考/工具卡片/回答各自成块）
+  var roundAsst = null;   // 最终轮容器（放最终回答与 JSON 渲染）
+  var t0 = Date.now();
+  var tickChip = addSys('⏳ 正在连接 API…');
+  var ticker = setInterval(function () {
+    var tchars = thinkLen ? (thinkLen >= 1000 ? Math.round(thinkLen / 1000) + 'k' : thinkLen) : 0;
+    tickChip.textContent = '⏳ 第 ' + (toolRound + 1) + ' 轮思考中… 已等待 ' + Math.round((Date.now() - t0) / 1000) +
+      's（思考 ' + tchars + ' 字' + (thinkFolded ? '，已折叠' : '') + '；推理型模型每轮 1-2 分钟属正常，思考实时显示在思考块里）';
+  }, 5000);
+
+  var toolCardSeq = 0;      // 跨轮单调序号（每轮工具调用从 0 开始，卡片键必须单调避免覆盖上一轮）
+  var roundIndexMap = {};   // 本轮内 index -> 全局 seq
+  var liveArgs = {};        // 工具实参增量累积（按 seq）
+  var liveNames = {};       // 工具名（按 seq）
+  // ── 思考流式批渲染优化（防长思考卡死）──
+  // 原实现每 SSE chunk 都 textContent+= + scrollBottom，思考几万字时每 chunk 触发整块重排 → 越到后面越卡。
+  // 改为：增量先入缓冲区，requestAnimationFrame 批量 flush（≤约60ms一次）；思考超过 THINK_MAX 后自动折叠 +
+  // 只保留字数计数（折叠后不追加正文，彻底不触发重排）。
+  var THINK_MAX = 60000;
+  var thinkBuf = '';
+  var thinkFlushRaf = null;
+  var thinkFolded = false;
+  var thinkLen = 0;
+  function flushThink() {
+    thinkFlushRaf = null;
+    if (!thinkBuf) return;
+    if (thinkFolded) { thinkBuf = ''; return; } // 已折叠：丢弃正文，只更新计数
+    if (!currentAsst || !currentAsst.thinkBody) return;
+    currentAsst.thinkBody.textContent += thinkBuf;
+    thinkBuf = '';
+    thinkLen = currentAsst.thinkBody.textContent.length;
+    if (thinkLen > THINK_MAX && currentAsst.thinkWrap) {
+      thinkFolded = true;
+      try {
+        currentAsst.thinkBody.style.display = 'none';
+        var togg = currentAsst.thinkWrap.querySelector('.togg');
+        if (togg) togg.textContent = '展开 ▸（思考已折叠·' + Math.round(thinkLen / 1000) + 'k 字）';
+      } catch (e) {}
+    }
+    scrollBottom();
+  }
+  function queueThink(t) {
+    thinkBuf += t;
+    if (!thinkFlushRaf) thinkFlushRaf = requestAnimationFrame(flushThink);
+  }
+  function onDelta(d) {
+    if (d.sys) { addSys(d.sys); return; }
+    if (d.reasoning) {
+      if (!currentAsst) { currentAsst = beginAssistant(); currentAsst.beginRound(toolRound + 1); }
+      if (!currentAsst.thinkBody) currentAsst.ensureThink();
+      currentAsst.sawReasoning = true;
+      queueThink(d.reasoning);
+      return;
+    }
+    if (d.content) {
+      currentAsst.ensureAnswer();
+      // 该模型无独立思考流（如 qwen omni：thinking 写在正文里）→ 明示，避免误以为模型没思考
+      if (!currentAsst.sawReasoning && currentAsst.thinkBody && !currentAsst.thinkBody.textContent) {
+        currentAsst.thinkBody.textContent = '（此模型思考随正文输出，未单独返回思考流）';
+      }
+      if (currentAsst.answerEl) {
+        currentAsst.answerEl.textContent += d.content;
+        // qwen 类模型推理全在 content：长文本限高滚动，不无限撑高页面
+        if (!currentAsst.answerHeightLimited && currentAsst.answerEl.textContent.length > 6000) {
+          currentAsst.answerHeightLimited = true;
+          if (currentAsst.answerWrap) { currentAsst.answerWrap.style.maxHeight = '240px'; currentAsst.answerWrap.style.overflowY = 'auto'; }
+        }
+      }
+      scrollBottom();
+      return;
+    }
+    if (d.toolDelta) {
+      currentAsst.finishThink();
+      var idx = d.index || 0;
+      if (roundIndexMap[idx] === undefined) roundIndexMap[idx] = toolCardSeq++;
+      var seq = roundIndexMap[idx];
+      if (d.toolDelta.function && d.toolDelta.function.arguments) liveArgs[seq] = (liveArgs[seq] || '') + d.toolDelta.function.arguments;
+      if (d.toolDelta.function && d.toolDelta.function.name) liveNames[seq] = d.toolDelta.function.name;
+      var card = currentAsst.ensureToolCard(seq);
+      if (liveNames[seq]) card.nameEl.textContent = liveNames[seq];
+      card.argsEl.textContent = formatArgs(liveArgs[seq]);
+      scrollBottom();
+    }
+  }
+
+var toolRound = 0;
+  var queryNudges = 0;   // 无查询验证引导累计（最多 3 次）
+  var calcNudges = 0;        // 没用草稿纸引导累计（最多 3 次）
+  var generalizeNudges = 0;  // 泛化空转引导累计（最多 2 次）
+  var reReadNudges = 0;      // 重复审题/复读自我否定引导累计（最多 2 次）
+  var emptyNudges = 0;       // 空转保护累计（无工具无内容；不做轮次上限，只防连续静默空转）
+  var openFailures = [];     // 未修复的构造失败对象（DSH 对齐：终审门禁，防止工具走形式带病交卷）
+  var auditStreak = 0;       // 连续违规轮（脑内算数/查询走形式）；一轮干净即归零
+  var failGateStrikes = 0;   // 终审门禁连续拦截轮（3 次后降级放行并要求 figureNote 说明）
+  var prevQueryRefs = null;  // 上一轮 ggb_query 的关键名字/数值（引用检测）
+  var definedObjects = {};   // 已成功定义的对象名（重复定义检测：画布保留上一轮的一切）
+  var lengthContinues = 0;   // max_tokens 截断连续轮（DSH 语义：length 不结束 turn；上限 5 后交 JSON 流程）
+  var finalRes = null;
+  try {
+    while (true) {
+      // ★ 每轮新建独立消息容器（DSH 式）：思考块→工具卡片→[下轮新思考块]→…→最终回答块，顺序堆叠不覆盖
+      currentAsst = beginAssistant();
+      currentAsst.beginRound(toolRound + 1);
+      scrollBottom(true);
+      // ── DSH 式上下文管理（步骤前压力检查，阈值 80%）：确定性修剪 → 检查点压缩 → 失败仅提示继续本轮 ──
+      var budget = getCtxBudget();
+      var pr = pruneSessionToolResults(conversation);
+      if (pr) {
+        conversation = pr.msgs;
+        addSys('✂️ 工具结果修剪：' + pr.pruned + ' 条超长结果保留头尾、中间截断（省 ' + Math.round(pr.savedChars / 1000) + 'k 字符）');
+      }
+      var totalNow = estTokens(conversation);
+      var thrTok = Math.floor(budget * COMPACT_THRESHOLD_RATIO);
+      if (totalNow >= thrTok) {
+        try {
+          var cstat = await compactSession(conversation, budget);
+          if (cstat) {
+            conversation = cstat.msgs;
+            addSys('📚 上下文压力 ' + Math.round(totalNow / 1000) + 'k ≥ 阈值 ' + Math.round(thrTok / 1000) + 'k：DSH 式压缩已生成检查点（最旧 ' + cstat.shadowed + ' 条 → 检查点 ' + Math.round(cstat.chkTokens / 1000) + 'k tokens；尾部 ' + Math.round(budget * COMPACT_RETAIN_RATIO / 1000) + 'k 保留原文，题目与图永不压缩）');
+          }
+        } catch (e) {
+          addSys('⚠️ 自动压缩失败：' + ((e && e.message) || e) + '；继续本轮（不影响解题）');
+        }
+      }
+      var res = await streamChat(conversation, onDelta, { signal: abortCtrl.signal, reasoningEffort: thinkLevel.effort, noThinking: thinkLevel.noThinking, onRepaired: function (m) { conversation = m; } });
+      // 流结束：当前轮思考块收束
+      currentAsst.finishThink();
+      roundAsst = currentAsst;
+      if (res.finishReason === 'tool_calls' && res.toolCalls.length) {
+        // DSH serializeAssistant 同款：保留模型本轮的正文 + 思考链（reasoning_content）回传 → 下一轮模型能看到自己上轮推理，连续往前推而不是从头来
+        var asstWire = { role:'assistant', content: res.content || null, tool_calls: res.toolCalls.map(function (tc) {
+          // 双保险读取实参：顶层 tc.arguments（resolve 提供）或 function.arguments，都缺则 '{}'——防 arguments 键被 JSON.stringify 丢弃 → API 400 missing field arguments
+          var tcArgs = (typeof tc.arguments === 'string' && tc.arguments) ? tc.arguments
+                     : (tc.function && typeof tc.function.arguments === 'string' ? tc.function.arguments : '{}');
+          return { id: tc.id, type: 'function', function: { name: tc.name || 'ggb_eval', arguments: tcArgs } };
+        }) };
+        if (reasoningReturnOK && res.reasoning) asstWire.reasoning_content = res.reasoning;
+        conversation.push(asstWire);
+        var roundAudit = []; // 本轮工具执行记录（供执行后审计/未修复清单）
+        for (var i = 0; i < res.toolCalls.length; i++) {
+          var tc = res.toolCalls[i];
+          var seqIdx = roundIndexMap[i] !== undefined ? roundIndexMap[i] : toolCardSeq++;
+          var card = currentAsst.ensureToolCard(seqIdx);
+          card.nameEl.textContent = tc.name;
+          card.argsEl.textContent = formatArgs(tc.function ? tc.function.arguments : tc.arguments);
+          card.statusEl.textContent = '执行中…';
+          card.statusEl.className = 'tc-status run';
+          card.resultEl.style.display = ''; card.resultEl.className = 'tc-result';
+          card.resultEl.textContent = '';
+          await yieldTask(); // 让浏览器渲染
+          var out = runGGBTool(tc.name, tc.arguments);
+          var toolContent = formatToolResult(tc.name, out);
+          conversation.push({ role:'tool', tool_call_id: tc.id, content: toolContent });
+          roundAudit.push({ name: tc.name, ok: out.ok, result: out.result || '', cmd: (function () { try { var a = JSON.parse(typeof tc.arguments === 'string' ? tc.arguments : (tc.function && tc.function.arguments) || '{}'); return String(a.command || ''); } catch (e) { return ''; } })() });
+          card.statusEl.textContent = out.ok ? '✓ 成功' : '✗ 失败';
+          card.statusEl.className = 'tc-status ' + (out.ok ? 'ok' : 'err');
+          card.resultEl.className = 'tc-result ' + (out.ok ? 'ok' : 'err');
+          card.resultEl.textContent = toolContent;
+          scrollBottom(true);
+        }
+        // 未修复失败清单更新（DSH 对齐：失败必须修复；成功定义/查询确认存在 → 清除）
+        openFailures = updateOpenFailures(openFailures, roundAudit);
+        // 已定义对象登记（重复定义检测：跨轮重发同一条构造命令 = 空转）
+        roundAudit.forEach(function (ra) {
+          if (ra.ok && ra.name === 'ggb_eval') {
+            var dm = /^\s*([A-Za-z]\w*)\s*=/.exec(ra.cmd || '');
+            if (dm) definedObjects[dm[1]] = true;
+          }
+        });
+        addSys('🔧 工具调用完成（' + res.toolCalls.length + ' 条），继续推理…');
+        var hasQuery = res.toolCalls.some(function (tc) { return (tc.name || '') === 'ggb_query'; });
+        var hasCalc = res.toolCalls.some(function (tc) { return (tc.name || '') === 'student_calc' || (tc.name || '') === 'student_solve'; });
+        // ── DSH 式执行后审计（优先级最高：带证据的裁决，违规即拦截下一轮；代替纯提示词威慑）──
+        var thinkText = (currentAsst && currentAsst.thinkBody) ? (currentAsst.thinkBody.textContent || '') : '';
+        var hasQueryNow = hasQuery; // 本轮是否调用过查询（引用检测豁免：模型还在继续查）
+        var verdict = auditDecide(roundAudit, thinkText, hasCalc, hasQueryNow, prevQueryRefs, definedObjects, canvasSnapshot());
+        if (verdict.calcMsg) {
+          auditStreak++;
+          var auditMsg = auditStreak >= 3 ? verdict.calcMsg.strong : verdict.calcMsg.mild;
+          conversation.push({ role:'assistant', content: '' });
+          conversation.push({ role:'user', content:[{ type:'text', text: auditMsg }] });
+          addSys('🧾 执行后审计·草稿纸：' + (auditStreak >= 3 ? '连续 ' + auditStreak + ' 轮' : '本轮') + ' 思考带算式但无草稿纸调用 → 已裁决下一轮先走草稿纸');
+          toolRound++;
+          roundIndexMap = {};
+          continue;
+        }
+        if (verdict.redunMsg || verdict.canvasMsg) {
+          auditStreak++;
+          conversation.push({ role:'assistant', content: '' });
+          conversation.push({ role:'user', content:[{ type:'text', text: (verdict.redunMsg || '') + (verdict.redunMsg && verdict.canvasMsg ? '\n\n' : '') + (verdict.canvasMsg || '') }] });
+          addSys('🧾 执行后审计·画布：' + (verdict.redunMsg ? '重复定义 ' + (verdict.redunMsg.match(/：([^—]+)—/)[1] || '已存在对象') : '') + (verdict.redunMsg && verdict.canvasMsg ? '；' : '') + (verdict.canvasMsg ? '只有点没有边 → 已裁决补齐图形' : '') + ' → 已裁决下轮修正');
+          toolRound++;
+          roundIndexMap = {};
+          continue;
+        }
+        if (verdict.tangleMsg) {
+          auditStreak++;
+          conversation.push({ role:'assistant', content: '' });
+          conversation.push({ role:'user', content:[{ type:'text', text: verdict.tangleMsg }] });
+          addSys('🧾 执行后审计·特定解：' + (auditStreak >= 3 ? '连续 ' + auditStreak + ' 轮' : '本轮') + ' 验证发现不成立却纠结（重读/再试/质疑）→ 已裁决：定理退化=特定解，直接反推隐含前提');
+          toolRound++;
+          roundIndexMap = {};
+          continue;
+        }
+        if (verdict.queryMsg) {
+          auditStreak++;
+          conversation.push({ role:'assistant', content: '' });
+          conversation.push({ role:'user', content:[{ type:'text', text: verdict.queryMsg }] });
+          addSys('🧾 执行后审计·查询：上一轮查询结果未被本轮推理引用（走形式）→ 已裁决强制引用或重查');
+          toolRound++;
+          roundIndexMap = {};
+          continue;
+        }
+        // 记录本轮查询引用快照（供下一轮引用检测）；本轮干净 → 违规计数归零
+        var querySnap = null;
+        for (var qi = 0; qi < roundAudit.length; qi++) {
+          if (roundAudit[qi].ok && roundAudit[qi].name === 'ggb_query') querySnap = extractQueryRefs(roundAudit[qi].result);
+        }
+        prevQueryRefs = querySnap;
+        auditStreak = 0;
+        // 页面级验证引导（用户反馈：Agent 要主动用 GG 推理而不是瞎猜）：本轮全是构造无查询 → 推送 ggb_query 核对指令（每轮 1 次，最多累计 3 次）
+        if (!hasQuery && queryNudges < 3) {
+          queryNudges++;
+          conversation.push({ role:'assistant', content: '' });
+          conversation.push({ role:'user', content:[{ type:'text', text:'你刚执行了 ' + res.toolCalls.length + ' 条 ggb_eval 但还没有查询验证。请立即用工具调用 ggb_query（{"names":"对象A,对象B,距离dXY","mode":"value"}）读出关键量真实数值，核对构造与结论；**凡是需要化简/计算/解方程的代数步骤，一律调用 student_calc 或 student_solve（学生草稿纸，精确手算结果）**，不要脑内口算。然后再决定继续构造或输出最终讲解正文。' }] });
+          addSys('🔎 已推送验证引导（' + queryNudges + '/3）：请用 ggb_query 读数核对…');
+          toolRound++;
+          roundIndexMap = {};
+          continue;
+        }
+        // 【已按用户判断移除"重新读题"强制注入】模型每轮重读题目的根源是"看不到自己的历史输出"，
+        // 已通过 content 保留 + reasoning_content 回传解决；中间注入是错误路径（干扰模型自主判断）。
+        // 只保留泛化空转检测（仅图模式）：图模式思考里出现"泛化解"倾向（任意/一般/普遍）→ 推送"以图为先·特定解"引导（最多 2 次）；
+        // 文本模式的"任意/一般"是正确方向，不触发
+        var thinkGeneralize = /任意|一般化|一般情况|对任意|普遍|泛化|general|恒成立|普适/.test(thinkText);
+        if (solveMode === 'specific' && thinkGeneralize && generalizeNudges < 2) {
+          generalizeNudges++;
+          conversation.push({ role:'assistant', content: '' });
+          conversation.push({ role:'user', content:[{ type:'text', text:'注意：你的思考还在向"对任意位置/任意参数都成立"的**泛化解**方向走——这类"求证××"题不是泛化恒等式：结论只在**题干＋隐藏条件＋题图结构**给出的特定构型下成立（证据：大多数这类题结论只在满足前提条件的那个特定位置成立）。请**以图为先**：① 回看图上的结构（顶点顺序、动点在边上的特定位置、线的走向），画布复刻题图；② 把"泛化尝试"只当一致性检查，发现不成立就**回题干/图找漏掉的前提**（隐藏条件、特定点）；③ 用特定前提 + 定理完成证明。不要再追求普适规律。' }] });
+          addSys('🎯 已推送特定解引导（' + generalizeNudges + '/2）：别找泛化解，以图为先并回到前提…');
+          toolRound++;
+          roundIndexMap = {};
+          continue;
+        }
+        toolRound++;
+        roundIndexMap = {}; // 下一轮重新编号（卡片序号保持全局单调）
+        continue; // ★ 无轮次上限：继续下一轮直至模型输出最终回答（可随时点「停止」）
+      }
+      // 空转保护：stop/length 且无工具调用、无输出内容 → 按优先级推针对性引导（无轮次上限，只防连续静默；最多 6 次后停止）
+      if ((res.finishReason === 'stop' || res.finishReason === 'length') && !res.toolCalls.length && !res.content) {
+        if (emptyNudges < 6) {
+          emptyNudges++;
+          var thinkT2 = (currentAsst && currentAsst.thinkBody) ? (currentAsst.thinkBody.textContent || '') : '';
+          var hasAlg2 = /√|\^[0-9]|化简|展开|代入|解出|求解|求根|通分|=\s*\(|f\(|方程/.test(thinkT2);
+          var hasGen2 = /任意|一般化|对任意|普遍|泛化|恒成立|普适/.test(thinkT2);
+          var msg, tip;
+          if (hasAlg2 && calcNudges < 3) {
+            calcNudges++;
+            msg = '注意：你刚才的思考里出现了大量代数算式（展开/化简/代入/解方程），但还没调用草稿纸。**代数化简/展开/代入必须用 student_calc，解方程必须用 student_solve**（模拟学生手算的精确引擎，√5 保留 √5、求根公式精确解）。请现在用草稿纸验证/完成刚才的推导步骤，再行动或输出。';
+            tip = '✏️ 已推送草稿纸引导（' + calcNudges + '/3）：思考里有代数但没用草稿纸…';
+          } else if (solveMode === 'specific' && hasGen2 && generalizeNudges < 2) {
+            generalizeNudges++;
+            msg = '你的思考还在往**泛化解**方向走——这类"求证××"题结论只在题干＋隐藏条件＋题图结构的特定构型下成立。请**以图为先**：画布复刻题图；泛化尝试只作一致性检查，发现不成立就回题干/图找前提；用特定前提+定理完成证明。';
+            tip = '🎯 已推送特定解引导（' + generalizeNudges + '/2）：别找泛化解，以图为先…';
+          } else {
+            msg = '你还没有输出内容也没有调用任何工具。请立即行动：用 ggb_eval 构造图形并逐步验证（ggb_query 读关键数值），然后输出最终讲解正文。';
+            tip = '↪ 模型空转：已推送行动指令，继续…';
+          }
+          conversation.push({ role:'assistant', content: '' }); // 空串而非 null——DeepSeek 要求 assistant 消息必须有 content 或 tool_calls
+          conversation.push({ role:'user', content:[{ type:'text', text: msg }] });
+          addSys(tip);
+          toolRound++;
+          continue;
+        }
+        addErr('⚠️ 模型连续空转 6 次（无工具无输出），已终止——可点「开始」重试');
+        break;
+      }
+      // ── DSH 语义：max_tokens 截断（length）不结束 turn——推理写满上限但尚未调用工具 → 继续下一轮
+      // （qwen 等无 reasoning 通道的模型把推理全写 content，长题推理会把 max_tokens 挤爆；截断≠完成）
+      if (res.finishReason === 'length' && !res.toolCalls.length) {
+        lengthContinues++;
+        var asstLen = { role:'assistant', content: res.content || '' };
+        if (reasoningReturnOK && res.reasoning) asstLen.reasoning_content = res.reasoning;
+        conversation.push(asstLen);
+        if (lengthContinues <= 5) {
+          conversation.push({ role:'user', content:[{ type:'text', text:'（你的上一条回复因长度上限被截断，且**没有包含任何工具调用**——你一直在叙述推理。**从现在起禁止任何叙述性文字**：不再分析、不再"让我开始/先想想/好的"，直接输出 JSON 格式的工具调用（ggb_eval/ggb_query/student_calc/student_solve 的完整参数）。如果一次只写一条工具调用也行，但必须写。若你确实需要说明，只说一行："调用工具"。）' }] });
+          addSys('📏 回复达输出上限被截断（' + lengthContinues + '/5，无工具调用）→ 继续下一轮：**禁止叙述，直接输出工具调用**');
+          toolRound++;
+          roundIndexMap = {};
+          continue;
+        }
+        // 连续 5 次仍截断 → 走 JSON 流程兜底（模型在 content 里可能已含答案）
+        lengthContinues = 0;
+        addSys('⚠️ 连续 5 轮 max_tokens 截断，按已有内容继续（可能不完整）');
+      }
+      // ── 终审门禁（DSH 对齐：工具失败必须修复后才允许结论，防"走形式带病交卷"）──
+      if (openFailures.length && res.content) {
+        var gateNames = openFailures.map(function (f) { return f.name; }).join('、');
+        conversation.push({ role:'assistant', content: res.content });
+        if (failGateStrikes < 3) {
+          failGateStrikes++;
+          conversation.push({ role:'user', content:[{ type:'text', text:'「终审门禁」画布上仍有未修复的构造失败：' + gateNames + '。请不要在失败状态下输出最终结论——先修复：① ggb_query {"names":"' + gateNames + '","mode":"defined"} 确认对象存在性；② 若缺失，检查命令写法与依赖顺序（Ellipse/Line/Point 是命令关键字，需先定义对象再引用）；③ 修复成功（ggb_query 读到非"未定义"值）后再输出最终讲解正文。' }] });
+          addSys('🚧 终审门禁（' + failGateStrikes + '/3）：未修复失败 ' + gateNames + ' → 拦截交卷，要求先修复');
+        } else {
+          openFailures = []; failGateStrikes = 0;
+          conversation.push({ role:'user', content:[{ type:'text', text:'「终审·降级放行」画布对象 ' + gateNames + ' 多次尝试仍无法定义。请检查它是否真的必要（可能只是辅助对象）；若确实无法在 GGB 中构造，请在最终讲解末尾的 JSON 附注块 figureNote 中明确注明「画布中 ' + gateNames + ' 构造失败：<原因>」，保证讲解与学生侧构建不依赖它，然后输出最终讲解正文。' }] });
+          addSys('🚧 终审门禁：3 次无法修复 → 降级放行（要求 figureNote 注明失败项）');
+        }
+        toolRound++;
+        roundIndexMap = {};
+        continue;
+      }
+      finalRes = res;
+      break;
+    }
+  } catch (e) {
+    clearInterval(ticker);
+    if (String(e.message || e) === 'aborted') {
+      addErr('⏹ 已停止（当前进度保留在画布上）');
+    } else {
+      addErr('请求失败：' + String(e.message || e));
+      if (currentAsst) currentAsst.finishThink();
+    }
+    running = false; setBusy(false); abortCtrl = null;
+    return;
+  }
+  clearInterval(ticker);
+  tickChip.remove();
+
+  // 最终回答：讲解正文（Markdown + KaTeX 渲染）为主交付物；JSON 降级为可选附注（answer/view/note），不再强制重放 commands
+  var text0 = (finalRes && finalRes.content) || '';
+  var json = safeExtractJSON(text0);
+  var bodyText = stripFencedJson(text0);
+  if (bodyText.trim().length >= 40) {
+    // 讲解正文直接渲染（Markdown + KaTeX）；JSON 附注仅提取 view/note/answer 应用展示
+    if (roundAsst) { roundAsst.ensureAnswer(); renderMarkdownTo(roundAsst.answerEl, bodyText); }
+    if (json) {
+      lastJson = json;
+      if (json.ggb && json.ggb.view && ggbApi) { try { setView(ggbApi, json.ggb.view); } catch (e) {} }
+      renderJsonAppendix(roundAsst, json);
+      addSys('✅ 完成：讲解已渲染（画布保持工具真实构造结果）' + (json.ggb && json.ggb.view ? '，视口已按建议调整' : ''));
+    } else {
+      addSys('✅ 完成：讲解已渲染（画布保持工具真实构造结果）');
+    }
+  } else if (json) {
+    // 兼容旧行为：纯 JSON 输出（无讲解正文）→ 原结构化渲染（但不自动重放 commands，画布已真实构造）
+    lastJson = json;
+    if (json.ggb && json.ggb.view && ggbApi) { try { setView(ggbApi, json.ggb.view); } catch (e) {} }
+    try {
+      renderJSONBlock(roundAsst, json);
+      addSys('✅ 完成：已按最终 JSON 渲染（画布保持工具真实构造结果）');
+    } catch (e) {
+      addErr('生成交互演示失败：' + String(e.message || e));
+    }
+  } else {
+    // 无正文无 JSON：兜底请求讲解正文（而非严格 JSON）
+    addSys('回答无讲解正文，向模型请求讲题稿…');
+    conversation.push({ role:'assistant', content: text0 || null });
+    conversation.push({ role:'user', content:[{ type:'text', text:'以上内容尚未形成讲题稿。请直接输出**教学讲解正文**（Markdown + KaTeX，见系统提示【最终输出】）：把审题（含隐含条件从哪来）→ 解题思路 → 每一步推导（引用草稿纸精确结果与画布读数验证）→ 结论讲完整；讲解末尾可附可选 JSON 附注块。' }] });
+    var asst2 = beginAssistant();
+    try {
+      var res2 = await streamChat(conversation, function (d) {
+        if (d.content) { asst2.ensureAnswer(); asst2.answerEl.textContent += d.content; }
+        if (d.reasoning) { asst2.ensureThink(); asst2.thinkBody.textContent += d.reasoning; }
+      }, { signal: abortCtrl.signal, reasoningEffort: thinkLevel.effort, noThinking: thinkLevel.noThinking });
+      asst2.finishThink();
+      var t2 = (res2.content || '');
+      var j2 = safeExtractJSON(t2);
+      var b2 = stripFencedJson(t2);
+      if (b2.trim().length >= 40) {
+        asst2.ensureAnswer(); renderMarkdownTo(asst2.answerEl, b2);
+        if (j2) { lastJson = j2; renderJsonAppendix(asst2, j2); }
+        addSys('✅ 完成：讲解已渲染（画布保持工具真实构造结果）');
+      } else if (j2) {
+        lastJson = j2; renderJSONBlock(asst2, j2);
+        addSys('✅ 完成：已按最终 JSON 渲染');
+      } else {
+        addErr('未能得到讲题稿。如需回看过程：上方工具卡片已直接执行、画布即最终结果。');
+      }
+    } catch (e2) {
+      if (String(e2.message || e2) !== 'aborted') addErr('讲题稿请求失败：' + String(e2.message || e2));
+    }
+  }
+
+  running = false; setBusy(false); abortCtrl = null;
+}
+function yieldTask() { return new Promise(function (r) { setTimeout(r, 30); }); }
+
+// ── 8. JSON 抽取 / 结果渲染 / GGB 重建（复用已验证修复）────────
+function safeExtractJSON(text) {
+  try {
+    var t = String(text || '');
+    var fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fence) t = fence[1];
+    var start = t.indexOf('{');
+    if (start === -1) return null;
+    var end = t.lastIndexOf('}');
+    t = t.slice(start, end + 1);
+    var j = JSON.parse(t);
+    return j && (j.ggb || j.question || j.answer) ? j : null;
+  } catch (e) {
+    try {
+      var t2 = String(text || '');
+      var s2 = t2.indexOf('{'); var e2 = t2.lastIndexOf('}');
+      t2 = t2.slice(s2, e2 + 1).replace(/,\s*([}\]])/g, '$1');
+      var j2 = JSON.parse(t2);
+      return j2 && (j2.ggb || j2.question || j2.answer) ? j2 : null;
+    } catch (e2) { return null; }
+  }
+}
+
+function mathSegments(t) {
+  var out = '', last = 0, m, tex, i;
+  t = String(t || '');
+  var re = /(\$\$[\s\S]*?\$\$|\$[^$\s][^$]*\$|\\\([\s\S]*?\\\))/g;
+  while ((m = re.exec(t))) {
+    out += esc(t.slice(last, m.index));
+    tex = m[1];
+    var isMd = false;
+    if (/^\$\$/.test(tex)) { tex = tex.slice(2, -2); isMd = true; }
+    else if (/^\\\(/.test(tex)) tex = tex.slice(2, -2);
+    else tex = tex.slice(1, -1);
+    out += '<span class="math' + (isMd ? ' md' : '') + '" data-tex="' + esc(tex) + '"></span>';
+    last = m.index + m[1].length;
+  }
+  out += esc(t.slice(last));
+  return out;
+}
+function renderKaTeX(blockEl) {
+  if (!window.katex) return;
+  blockEl.querySelectorAll('.math').forEach(function (el) {
+    try { katex.render(el.dataset.tex || '', el, { throwOnError: false, displayMode: el.classList.contains('md') }); } catch (e) {}
+  });
+}
+// 去掉讲解正文里的 ```json 附注块（JSON 用 safeExtractJSON 另取）
+function stripFencedJson(t) {
+  return String(t || '').replace(/```json[\s\S]*?```/g, '');
+}
+// 行内 Markdown 后处理：对已含 KaTeX span 的 HTML 做粗体替换（** 不会出现在公式内，安全）
+function inlineMd(s) {
+  return String(s || '').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+}
+// 讲解正文渲染（Markdown 子集：标题/列表/代码块/KaTeX/段落）→ 学生可读讲题稿
+function renderMarkdownTo(el, md) {
+  var lines = String(md || '').replace(/\r\n/g, '\n').split('\n');
+  var html = '', inUl = false, para = [];
+  function flushPara() {
+    if (para.length) { html += '<p>' + inlineMd(mathSegments(para.join('<br/>'))) + '</p>'; para = []; }
+  }
+  function closeUl() { if (inUl) { html += '</ul>'; inUl = false; } }
+  var stack = ''; // 块级 $$..$$（跨行）累积
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (!line) { flushPara(); closeUl(); continue; }
+    if (line.indexOf('```') === 0) {
+      flushPara(); closeUl();
+      var code = [];
+      i++;
+      while (i < lines.length && lines[i].trim().indexOf('```') !== 0) { code.push(lines[i]); i++; }
+      html += '<pre class="tccode">' + esc(code.join('\n')) + '</pre>';
+      continue;
+    }
+    var h = line.match(/^(#{1,3})\s+(.*)$/);
+    if (h) {
+      flushPara(); closeUl();
+      var lvl = h[1].length;
+      html += '<h' + lvl + '>' + inlineMd(mathSegments(h[2])) + '</h' + lvl + '>';
+      continue;
+    }
+    if (/^[-*•]\s+/.test(line)) {
+      flushPara();
+      if (!inUl) { html += '<ul>'; inUl = true; }
+      html += '<li>' + inlineMd(mathSegments(line.replace(/^[-*•]\s+/, ''))) + '</li>';
+      continue;
+    }
+    closeUl();
+    // 块级 $$ 公式：独立段落的 $$...$$ 由 mathSegments 处理（md 类）；其余按段落
+    para.push(line);
+  }
+  flushPara(); closeUl();
+  el.innerHTML = html || esc(String(md || ''));
+  renderKaTeX(el);
+  scrollBottom(true);
+}
+// JSON 附注（answer/conditionSource/figureNote/ggb.note）追加在讲解正文下方
+function renderJsonAppendix(asst, json) {
+  if (!asst || !asst.answerWrap) return;
+  var h = '';
+  if (json.answer) h += '<div class="answer-box">结论：' + esc(json.answer) + '</div>';
+  if (json.conditionSource) h += '<div class="tip" style="margin-top:6px"><b>🔍 条件出处：</b>' + esc(json.conditionSource) + '</div>';
+  if (json.figureNote) h += '<div class="tip"><b>图形结构：</b>' + esc(json.figureNote) + '</div>';
+  if (json.ggb && json.ggb.note) h += '<div class="tip"><b>演示提示：</b>' + esc(json.ggb.note) + '</div>';
+  if (!h) return;
+  var d = document.createElement('div');
+  d.style.marginTop = '6px';
+  d.innerHTML = h;
+  asst.answerWrap.appendChild(d);
+  renderKaTeX(d);
+  scrollBottom(true);
+}
+
+// 在 AI 消息容器里渲染结构化 JSON 块（题目/解析/结论 + 重建按钮 + 原始 JSON）
+function renderJSONBlock(asst, json) {
+  asst.ensureAnswer();
+  var a = asst.answerEl;
+  var h = '';
+  // 📖 讲题稿（老师口吻讲解）优先渲染——这是“讲题”的直接呈现
+  if (json.teaching) h += '<div class="teaching"><b>📖 讲题（老师口吻）：</b>' + mathSegments(json.teaching) + '</div>';
+  if (json.question) h += '<div class="stem"><b>题目：</b>' + esc(json.question) + '</div>';
+  if (json.conditionSource) h += '<div class="tip" style="margin-top:6px"><b>🔍 条件出处：</b>' + esc(json.conditionSource) + '</div>';
+  if (json.figureNote) h += '<div class="tip"><b>图形结构：</b>' + esc(json.figureNote) + '</div>';
+  if (json.solution && json.solution.length) {
+    h += '<ol class="steps">';
+    json.solution.forEach(function (s) { h += '<li>' + mathSegments(s) + '</li>'; });
+    h += '</ol>';
+  }
+  if (json.answer) h += '<div class="answer-box">结论：' + esc(json.answer) + '</div>';
+  if (json.ggb && json.ggb.note) h += '<div class="tip"><b>演示提示：</b>' + esc(json.ggb.note) + '</div>';
+  h += '<div style="margin-top:8px;display:flex;gap:8px">' +
+       '<button class="ghostc" id="btn-rebuild">↻ 按 JSON 重建画布</button>' +
+       '<button class="ghostc" id="btn-toggle-json">原始 JSON</button></div>';
+  h += '<pre class="raw-json">' + esc(JSON.stringify(json, null, 1)) + '</pre>';
+  a.innerHTML = h;
+  renderKaTeX(a);
+  a.querySelector('#btn-rebuild').addEventListener('click', function () {
+    try { buildFromJson(json); addSys('↻ 已按最后 JSON 重建画布'); } catch (e) { addErr('重建失败：' + e.message); }
+  });
+  a.querySelector('#btn-toggle-json').addEventListener('click', function (ev) {
+    var rawEl = a.querySelector('.raw-json');
+    var show = rawEl.style.display !== 'block';
+    rawEl.style.display = show ? 'block' : 'none';
+    ev.currentTarget.textContent = show ? '隐藏 JSON' : '原始 JSON';
+  });
+  // 完成时强制滚动到聊天底部——讲题稿/结论一定可见，不受用户上滚的 autoScroll 影响
+  autoScroll = true;
+  chatScroll.scrollTop = chatScroll.scrollHeight;
+}
+
+// ── 9. GeoGebra：常驻 applet + 视口修正 + 构造重建 ───────────
+// 坐标比例修复（勿回退）：classic 布局左侧代数面板占 40% 宽把绘图视图挤窄 → 1x≠1y。
+// ① setPerspective(divider 0.4→0) 隐藏代数面板；② setView 从 XML 读真实视图 <size>，
+//    世界 Y 跨度 = X 跨度 × h/w → scale≡yscale → 像素正方形。
+function setView(api, view) {
+  try {
+    var w = 458, h = 558;
+    var m = String(api.getXML() || '').match(/<euclidianView>[\s\S]*?<size width="([\d.]+)" height="([\d.]+)"/);
+    if (m) { w = parseFloat(m[1]); h = parseFloat(m[2]); }
+    var xmin = -2, xmax = 8, ymid = 3.3;
+    if (view && typeof view.xmin === 'number') xmin = view.xmin;
+    if (view && typeof view.xmax === 'number') xmax = view.xmax;
+    if (view && typeof view.ymin === 'number' && typeof view.ymax === 'number') { ymid = (view.ymin + view.ymax) / 2; }
+    var spanX = xmax - xmin;
+    var spanY = spanX * h / w;
+    var y0 = ymid - spanY / 2, y1 = ymid + spanY / 2;
+    if (view && typeof view.ymin === 'number' && typeof view.ymax === 'number') { y0 = view.ymin; y1 = view.ymax; }
+    api.setCoordSystem(xmin, xmax, y0, y1);
+  } catch (e) {}
+}
+function clearConstruct(api) {
+  try {
+    var names = api.getAllObjectNames();
+    for (var i = 0; i < names.length; i++) { try { api.deleteObject(names[i]); } catch (e) {} }
+  } catch (e) {}
+}
+// 平行线写法自动修正（防 LLM 坏写法 Line(D,A+C)/Line(D,AC)，勿回退）
+function fixParallelLines(cmds) {
+  var defined = {};
+  cmds.forEach(function (c) { var m = /^\s*([A-Za-z][A-Za-z0-9]*)\s*=/.exec(c); if (m) defined[m[1]] = true; });
+  var dirLines = [];
+  cmds.forEach(function (c) {
+    var m = /^\s*([A-Za-z][A-Za-z0-9]*)\s*=\s*Line\(\s*\([^)]*\)\s*,\s*\([^)]*\)\s*\)/.exec(c);
+    if (m) { dirLines.push(m[1]); return; }
+    m = /^\s*([A-Za-z][A-Za-z0-9]*)\s*=\s*Line\(\s*([A-Za-z][A-Za-z0-9]*)\s*,\s*([A-Za-z][A-Za-z0-9]*)\s*\)/.exec(c);
+    if (m) { dirLines.push(m[1]); return; }
+  });
+  var fixedN = 0;
+  var out = cmds.map(function (c) {
+    var m = c.match(/^\s*([A-Za-z][A-Za-z0-9]*)\s*=\s*Line\(\s*([A-Za-z][A-Za-z0-9]*)\s*,\s*((?:[A-Za-z][A-Za-z0-9]*[+\-\u2212])+[A-Za-z][A-Za-z0-9]*)\s*\)/);
+    if (m && dirLines.length) { fixedN++; return m[1] + '=Line(' + m[2] + ',' + dirLines[0] + ')'; }
+    m = c.match(/^\s*([A-Za-z][A-Za-z0-9]*)\s*=\s*Line\(\s*([A-Za-z][A-Za-z0-9]*)\s*,\s*([A-Z]{2})\s*\)$/);
+    if (m && m[2].length === 2 && dirLines.length && !defined[m[3]]) { fixedN++; return m[1] + '=Line(' + m[2] + ',' + dirLines[0] + ')'; }
+    return c;
+  });
+  return { cmds: out, fixed: fixedN };
+}
+// 线段自动补（有 Distance 无 Segment 时补画，勿回退）
+function fixSegments(cmds) {
+  var out = cmds.slice();
+  var joined = cmds.join('\n');
+  var added = 0;
+  cmds.forEach(function (c) {
+    var m = /Distance\(\s*([A-Za-z][A-Za-z0-9]*)\s*,\s*([A-Za-z][A-Za-z0-9]*)\s*\)/.exec(c);
+    if (!m) return;
+    var X = m[1], Y = m[2];
+    var segName = 'seg' + X + Y;
+    var hasSeg = out.some(function (x) { return x.indexOf(segName + '=') === 0; });
+    if (hasSeg || joined.indexOf('Segment(' + X + ',' + Y + ')') !== -1) return;
+    out.push(segName + '=Segment(' + X + ',' + Y + ')');
+    out.push('ShowLabel(' + segName + ', false)');
+    if (X === 'C' && Y === 'E') { out.push('SetColor(' + segName + ', 0.84, 0.2, 0.2)'); out.push('SetThickness(' + segName + ', 4)'); }
+    if (X === 'C' && Y === 'F') { out.push('SetColor(' + segName + ', 0.16, 0.44, 0.86)'); out.push('SetThickness(' + segName + ', 4)'); }
+    added++;
+  });
+  return { cmds: out, added: added };
+}
+function buildFromJson(json) {
+  var api = ggbApi;
+  if (!api) throw new Error('GeoGebra 尚未就绪，请稍候');
+  var g = json.ggb || {};
+  clearConstruct(api);
+  var _fix = fixParallelLines([].concat(g.commands || []));
+  var _seg = fixSegments(_fix.cmds);
+  var cmds = _seg.cmds.concat(g.readouts || []);
+  var _note = _seg.added ? _seg.added + ' 处已自动补画线段（Distance 不会自动画图）' : '';
+  if (_fix.fixed) _note += (_note ? '；' : '') + _fix.fixed + ' 处平行线写法已自动修正';
+  cmds.forEach(function (c) { try { api.evalCommand(c); } catch (e) { console.warn('cmd fail: ' + c, e); } });
+  try { api.evalCommand('SetActiveView(1)'); } catch (e) {}
+  var view = g.view || {};
+  setView(api, view);
+  setTimeout(function () { try { setView(api, view); } catch (e) {} }, 800);
+  setTimeout(function () { try { setView(api, view); } catch (e) {} }, 2500);
+  var note = g.note || '';
+  var noteEl = document.getElementById('ggb-note');
+  if (noteEl) {
+    noteEl.innerHTML = '<b>演示提示：</b>' + esc(note) + (_note ? '（' + esc(_note) + '）' : '');
+    noteEl.style.display = note || _note ? 'block' : 'none';
+  }
+}
+function initApplet() {
+  var parameters = {
+    width: 780, height: 560,
+    showToolBar: false, showMenuBar: false, showAlgebraInput: false,
+    showResetIcon: true, enableLabelDrags: false, enableShiftDragZoom: true,
+    enableRightClick: false, showZoomButtons: false, language: 'zh', capture3DIcons: false,
+    appletOnLoad: function (api) {
+      ggbApi = api;
+      window.ggbApplet = api;
+      try { if (typeof api.setErrorDialogsActive === 'function') api.setErrorDialogsActive(false); } catch (e) {}
+      // 隐藏左侧代数窗面板（divider 0.4→0，实测生效）→ 绘图视图占满
+      try { api.setPerspective(String(api.getPerspectiveXML() || '').replace(/divider="0\.4"/, 'divider="0"')); } catch (e) {}
+      setTimeout(function () { try { setView(api, null); } catch (e) {} }, 800);
+      setTimeout(function () { try { setView(api, null); } catch (e) {} }, 2500);
+      addSys('📐 GeoGebra 画布就绪（工具工作台可用），可开始解题或载入内置演示');
+    }
+  };
+  if (window.GGBApplet) {
+    new GGBApplet(parameters, true).inject('ggb-element');
+  } else {
+    document.getElementById('ggb-element').innerHTML =
+      '<p style="padding:24px;color:#d63c3c">GeoGebra 加载失败（deployggb.js 未就绪，网络受限时请稍后重试）</p>';
+  }
+}
+
+// ── 10. 事件绑定 ────────────────────────────────────────────
+document.getElementById('btn-send').addEventListener('click', function () {
+  var t = document.getElementById('input-text').value.trim();
+  if (!t && !currentImage) { addErr('请上传题目图片或输入题目文字'); return; }
+  document.getElementById('input-text').value = '';
+  runReAct(t);
+});
+document.getElementById('input-text').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('btn-send').click(); }
+});
+document.getElementById('btn-stop').addEventListener('click', function () {
+  if (abortCtrl) { try { abortCtrl.abort(); } catch (e) {} }
+});
+document.getElementById('btn-clear').addEventListener('click', function () {
+  conversation = []; lastJson = null; currentImage = null;
+  chatScroll.innerHTML = '';
+  if (ggbApi) { try { clearConstruct(ggbApi); } catch (e) {} }
+  document.getElementById('ggb-note').style.display = 'none';
+  scratchClear();
+  addSys('🔄 会话与草稿档案已清空');
+});
+
+// 内置演示（无 Key 可跑通完整工作流后半段）
+var SAMPLE_JSON = {
+  "subject":"数学",
+  "question":"如图，F 为正方形 ABCD 边 CD 上一点，连接 AC、AF，延长 AF 交 AC 的平行线 DE 于点 E，连接 CE。求证：CE=CF。",
+  "conditionSource":"题干与图形上的条件：正方形 ABCD、F 在 CD 边上、DE∥AC、A/F/E 共线、求证 CE=CF（均已核对）。**隐含前提：AE=AC（由结论反推，非题干显式）**——任意 F 时 CE≠CF，只有 F 满足 AE=AC（即 CF=a(√3−1)）时 CE=CF 成立。若按「任意 F」证明会得到矛盾，这正是本题隐含前提的线索。",
+  "figureNote":"正方形 ABCD（A 左上、B 左下、C 右下、D 右上），F 在 CD 边上，DE 过 D 且平行于 AC，E 在 AF 延长线上。",
+  "teaching":"同学们，我们先审题：正方形 ABCD 边长记为 a，F 是 CD 边上的一点，过 D 作 DE 平行于 AC，AF 延长后与 DE 交于 E。注意：题干与图上**都没有**显式给出隐藏条件——但我们要证 CE=CF，这个结论**不是对任意 F 都成立**的。这就是本题的关键：先任意取 F 构造、在画布上验证，会发现一般位置 CE≠CF（例如 F 取中点时 CE=4、CF=2）。这说明**题目隐含着一个前提**把 F 约束到特定位置。我们用代数把它挖出来：设 CF=x，由 DE∥AC 可算得 E=(a²/x, 2a−a²/x)，令 |CE|=x 解方程，得到 x=a(√3−1)≈0.732a——即 F 在距 C 约 3/4 边长的位置时结论成立。再回代验证：此时 AE=AC 恰好成立（dAE=dAC=5.66）——所以**隐含前提就是 AE=AC**。讲题时如果被问「条件哪来的」，答：这是由结论反推出的隐含前提，题干/图形未显式给出，原题默认它成立。",
+  "solution":[
+    "设边长为 a，F=(a, x)，CF=x。DE ∥ AC 且 AC 斜率为 -1，故 DE: y = -X + 2a。",
+    "E 在 AF 延长线上：E = (a²/x, 2a - a²/x)。",
+    "条件 AE=AC：|AE|² = 2a² → x² + 2ax - 2a² = 0 → x = a(√3-1) ≈ 0.732a。",
+    "验证 CE² = ((a²/x-a)² + (2a-a²/x)²) = a²((a-x)²+(2x-a)²)/x²，代入 x=a(√3-1) 化简得 CE² = x²。",
+    "故 CE = CF，得证。"
+  ],
+  "answer":"CE = CF",
+  "ggb":{
+    "commands":[
+      "A=(0,4)","B=(0,0)","C=(4,0)","D=(4,4)",
+      "sq=Polygon(A,B,C,D)",
+      "gAC=Line(A,C)","segAC=Segment(A,C)",
+      "F=Point(Segment(C,D))",
+      "F0=Point(Segment(C,D), 0.7320508075688773)",
+      "rAF=Ray(A,F)",
+      "lDE=Line(D,gAC)",
+      "E=Intersect(rAF,lDE)",
+      "ce=Segment(C,E)","cf=Segment(C,F)",
+      "dCE=Distance(C,E)","dCF=Distance(C,F)",
+      "dAE=Distance(A,E)","dAC=Distance(A,C)",
+      "SetColor(ce, 0.84, 0.2, 0.2)","SetColor(cf, 0.16, 0.44, 0.86)",
+      "SetThickness(ce, 4)","SetThickness(cf, 4)","SetThickness(segAC, 2)",
+      "ShowLabel(gAC, false)","ShowLabel(sq, false)","ShowLabel(segAC, false)",
+      "ShowLabel(lDE, false)","ShowLabel(rAF, false)","ShowLabel(ce, false)","ShowLabel(cf, false)",
+      "SetColor(F0, 0.55, 0.55, 0.55)","SetPointSize(F0, 2)","SetCaption(F0, \"F′\")"
+    ],
+    "readouts":[
+      "T4=Text(If(IsDefined(dAE), If(abs(dAE-dAC)<0.05, \"✓ AE = AC（条件满足）\", \"把 F 拖到 F′\"), \"目标：把 F 拖到灰色 F′\"), (-0.6, 6.1))",
+      "T1=Text(If(IsDefined(dCE), \"CE = \" + dCE + \"　CF = \" + dCF, \"先把 F 沿 CD 拖离 C 端\"), (-0.6, 5.1))",
+      "T2=Text(If(IsDefined(dAE), \"AE = \" + dAE + \"　AC = \" + dAC, \"\"), (-0.6, 5.6))",
+      "T3=Text(If(IsDefined(dCE), If(abs(dCE-dCF)<0.05, \"✓ CE = CF　成立\", \"✗ CE ≠ CF\"), \"拖 F 生成图形\"), (-0.6, 4.6))"
+    ],
+    "view":{"xmin":-2,"xmax":8},
+    "note":"拖动 F（CD 边上的点）沿边滑动：恰在 F′（AE=AC 精确位置）处读数变绿 ✓ CE=CF。"
+  }
+};
+function loadDemo() {
+  if (running) return;
+  currentImage = null;
+  addUser('载入内置演示 JSON（CE=CF 完整示例，无需 API Key）');
+  var asst = beginAssistant();
+  lastJson = SAMPLE_JSON;
+  addSys('📦 已载入演示 JSON → 生成');
+  try {
+    buildFromJson(SAMPLE_JSON);
+    renderJSONBlock(asst, SAMPLE_JSON);
+    addSys('✅ 演示已生成：右侧画布可见正方形 + 可拖动 F，左侧为完整解析');
+  } catch (e) {
+    addErr('生成失败（GeoGebra 尚未就绪？）：' + String(e.message || e));
+  }
+}
+document.getElementById('btn-demo').addEventListener('click', loadDemo);
+
+// ── 11. 设置抽屉 ────────────────────────────────────────────
+var drawer = document.getElementById('drawer');
+var overlay = document.getElementById('drawer-overlay');
+function openDrawer() { drawer.classList.add('open'); overlay.classList.add('open'); }
+function closeDrawer() { drawer.classList.remove('open'); overlay.classList.remove('open'); }
+document.getElementById('btn-gear').addEventListener('click', openDrawer);
+document.getElementById('btn-drawer-close').addEventListener('click', closeDrawer);
+overlay.addEventListener('click', closeDrawer);
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDrawer(); });
+document.getElementById('btn-load-preset').addEventListener('click', function () {
+  loadPreset(document.getElementById('preset').value);
+  addSys('⚙ 已载入预设：' + (PRESETS[document.getElementById('preset').value] || {}).note || '');
+  saveConfig();
+});
+['protocol','baseurl','apikey','model','jsonmode'].forEach(function (id) {
+  document.getElementById(id).addEventListener('input', saveConfig);
+  document.getElementById(id).addEventListener('change', saveConfig);
+});
+['stage-baseurl','stage-apikey','stage-model'].forEach(function (id) {
+  document.getElementById(id).addEventListener('input', saveStageCfg);
+  document.getElementById(id).addEventListener('change', saveStageCfg);
+});
+document.getElementById('think-strength').addEventListener('change', saveThinkLevel);
+document.getElementById('ctx-budget').addEventListener('change', saveCtxBudget);
+document.getElementById('ctx-budget').addEventListener('input', saveCtxBudget);
+document.getElementById('btn-test-api').addEventListener('click', function () {
+  var cfg = getConfig();
+  var box = document.getElementById('api-test-result');
+  box.style.display = 'block';
+  box.className = '';
+  box.textContent = '正在测试连接…';
+  if (!cfg.baseurl || !cfg.apikey || !cfg.model) {
+    box.className = 'err'; box.textContent = '请先填全 Base URL / Key / 模型';
+    return;
+  }
+  fetch(buildRequestUrl(cfg), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apikey },
+    body: JSON.stringify({ model: cfg.model, messages: [{ role:'user', content:'ping' }], max_tokens: 8, stream: false })
+  }).then(function (r) {
+    if (!r.ok) return r.text().then(function (t) { throw new Error('HTTP ' + r.status + ': ' + t.slice(0, 200)); });
+    return r.json();
+  }).then(function (j) {
+    var okText = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '(无内容)';
+    box.className = 'ok';
+    box.textContent = '✓ 连接成功：' + (j.model || cfg.model) + ' → ' + String(okText).slice(0, 60);
+  }).catch(function (e) {
+    box.className = 'err';
+    box.textContent = '✗ 连接失败：' + String(e.message || e);
+  });
+});
+
+updateScratchBadge();
+initApplet();
+</script>
+</body>
+</html>

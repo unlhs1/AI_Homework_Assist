@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>数学动态演示 · 题目解析 + 可动几何（CE=CF 证明）</title>
+<link rel="stylesheet" href="../lib/katex/katex.min.css" />
+<style>
+  :root {
+    --bg:#f6f7fb; --panel:#ffffff; --ink:#1f2430; --sub:#6b7280; --accent:#2a6fdb;
+    --ok:#0e9f6e; --bad:#d63c3c; --border:#e3e6ee; --hl:#fff7e0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html,body { height: 100%; }
+  body { font-family: "Segoe UI","Microsoft YaHei","PingFang SC",sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:linear-gradient(90deg,#2a6fdb,#4a9cf0); color:#fff; padding:14px 22px; display:flex; align-items:baseline; gap:14px; }
+  header h1 { font-size:18px; font-weight:600; }
+  header .sub { font-size:12px; opacity:.85; }
+  main { display:grid; grid-template-columns: minmax(340px, 440px) 1fr; gap:18px; padding:18px 22px; height:calc(100% - 58px); }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; overflow:auto; }
+  .panel h2 { font-size:14px; margin:0 0 10px; color:var(--accent); border-left:3px solid var(--accent); padding-left:8px; }
+  .panel h3 { font-size:13px; margin:12px 0 6px; }
+  .problem-img { width:100%; border-radius:8px; border:1px solid var(--border); margin-bottom:10px; }
+  .stem { line-height:1.7; font-size:14px; background:var(--hl); border:1px solid #f5e9bf; border-radius:8px; padding:10px 12px; }
+  .stem .concl { font-weight:600; }
+  .math { padding:0 2px; }
+  blockquote { margin:10px 0 0; padding:8px 12px; border-left:3px solid var(--sub); background:#f3f4f8; font-size:13px; line-height:1.65; border-radius:4px; }
+  ol.steps { margin:8px 0 0 20px; font-size:13.5px; line-height:1.8; }
+  ol.steps li { margin-bottom:6px; }
+  .ok { color:var(--ok); font-weight:600; }
+  .bad { color:var(--bad); font-weight:600; }
+  .tip { margin-top:12px; font-size:12.5px; color:var(--sub); line-height:1.7; }
+  .tip b { color:var(--ink); }
+  .right { display:flex; flex-direction:column; gap:10px; }
+  .gg-wrap { background:#fff; border:1px solid var(--border); border-radius:12px; padding:12px; }
+  .gg-wrap h2 { font-size:14px; color:var(--accent); border-left:3px solid var(--accent); padding-left:8px; margin:0 0 8px; }
+  /* 固定画布尺寸（780×560），不再被 flex 拉伸变形；小屏用 max-width 收缩 */
+  #ggb-element { width:780px; height:560px; max-width:100%; margin:0 auto; border:1px solid #e8ebf2; border-radius:8px; overflow:hidden; }
+  .footer-note { font-size:11.5px; color:var(--sub); margin-top:6px; }
+  .footer-note a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>数学动态演示 · 题目解析 + 可动几何</h1>
+  <span class="sub">初中几何证明 · 第 2 题（GeoGebra 交互版，拖动 F 实时联动）</span>
+</header>
+
+<main>
+  <!-- 左栏：题目 + 解析 -->
+  <section class="panel">
+    <h2>① 题目</h2>
+    <img class="problem-img" src="../assets/problem.jpg" alt="原题截图" title="原题截图" />
+    <div class="stem">
+      <div>如图，<b>F</b> 为正方形 <b>ABCD</b> 边 <b>CD</b> 上一点，连接 <b>AC</b>、<b>AF</b>，延长 <b>AF</b> 交 <b>AC</b> 的平行线 <b>DE</b> 于点 <b>E</b>，且 <span class="math" data-tex="AE=AC"></span>，连接 <b>CE</b>。</div>
+      <div style="margin-top:6px;">求证：<span class="conj concl" data-tex="CE=CF"></span></div>
+    </div>
+
+    <h2>② 解题解析（坐标法，可与右侧动态图对照）</h2>
+    <blockquote>设正方形边长为 <span class="math" data-tex="a"></span>，建立如图坐标系：<span class="math" data-tex="A(0,a),\ B(0,0),\ C(a,0),\ D(a,a)"></span>。</blockquote>
+    <ol class="steps">
+      <li>F 在 <span class="math" data-tex="CD"></span> 上，设 <span class="math" data-tex="CF=x\ (0&lt;x&lt;a)"></span>，则 <span class="math" data-tex="F=(a,x)"></span>。</li>
+      <li><span class="math" data-tex="DE\parallel AC"></span>，而 <span class="math" data-tex="AC"></span> 斜率为 <span class="math" data-tex="-1"></span>，故直线 <span class="math" data-tex="DE:\ y=-X+2a"></span>；又 <span class="math" data-tex="E=A+t(F-A)"></span> 在 <span class="math" data-tex="AF"></span> 延长线上，联立解得
+        <div class="math" data-tex="E=\left(\frac{a^2}{x},\ 2a-\frac{a^2}{x}\right)"></div>
+      </li>
+      <li>条件 <span class="math" data-tex="AE=AC"></span>：由 <span class="math" data-tex="|AE|^2=2a^2"></span> 得
+        <div class="math" data-tex="x^2+2ax-2a^2=0\ \Rightarrow\ x=a(\sqrt{3}-1)"></div>
+      </li>
+      <li>验证 <span class="math" data-tex="CE"></span>：
+        <div class="math" data-tex="CE^2=\left(\frac{a^2}{x}-a\right)^2+\left(2a-\frac{a^2}{x}\right)^2=\frac{a^2\big((a-x)^2+(2x-a)^2\big)}{x^2}"></div>
+        代入 <span class="math" data-tex="x=a(\sqrt{3}-1)"></span>，化简得 <span class="math" data-tex="CE^2=x^2"></span>。
+      </li>
+      <li>故 <span class="math" data-tex="CE=CF"></span>，得证 <span class="ok">✓</span>。</li>
+    </ol>
+
+    <h2>③ 动态演示要点</h2>
+    <div class="tip">
+      <b>拖动右图点 F</b>（在 CD 边上滑动）：E、CE、CF 实时联动。<br />
+      · 上方读数 <span class="ok">绿</span>/<span class="bad">红</span> 显示 <span class="math" data-tex="CE,\ CF,\ AE,\ AC"></span> 与相等判断；<br />
+      · 规律：恰在 <span class="math" data-tex="AE=AC"></span>（<span class="math" data-tex="CF=a(\sqrt3-1)\approx0.732a"></span>，即 F 距 C 约 3/4）时 <span class="math" data-tex="CE=CF"></span> 成立；<br />
+      · 把 <b>F 拖到灰色标记点 F′</b> 处（即 AE=AC 的精确位置），读数变绿「✓ CE = CF」；拖走再拖回即可反复验证。<br />
+      · ⚠️ F 起点在 C 端（param 0），沿 CD 边向上拖到 F′ 即可；用无参数 Point(path) 保证可拖（此 build 中带参数 Point(path,数值) 是固定点拖不动）。
+    </div>
+  </section>
+
+  <!-- 右栏：GeoGebra 可动几何 -->
+  <div class="right">
+    <div class="gg-wrap">
+      <h2>④ 可动几何（GeoGebra · 拖动 F 联动）</h2>
+      <div id="ggb-element"></div>
+      <div class="footer-note">由 <a href="https://www.geogebra.org" target="_blank" rel="noopener">GeoGebra</a> 开源内核嵌入（geogebra.org/apps）。KaTeX 公式渲染为本地副本。原题见 <a href="http://m.1010jiajiao.com/czsx/shiti_id_6ac765c3311d82ba47aacb377d4ec794" target="_blank" rel="noopener">青夏教育</a>。</div>
+    </div>
+  </div>
+</main>
+
+<script src="../lib/katex/katex.min.js"></script>
+<script>
+  document.querySelectorAll('.math').forEach((el) => {
+    katex.render(el.dataset.tex || '', el, { throwOnError: false });
+  });
+</script>
+
+<script src="https://www.geogebra.org/apps/deployggb.js"></script>
+<script>
+  // ── 构造：正方形 ABCD（A 左上 → B 左下 → C 右下 → D 右上）+ F∈CD + AE=AC → 证 CE=CF ──
+  function buildFigure(app) {
+    // 静默错误弹窗（API 存在才调用），避免构造中途的报错对话框打断演示
+    try { if (typeof app.setErrorDialogsActive === 'function') app.setErrorDialogsActive(false); } catch (e) {}
+    var cmds = [
+      'A=(0,4)', 'B=(0,0)', 'C=(4,0)', 'D=(4,4)',
+      'sq=Polygon(A,B,C,D)',
+      'gAC=Line(A,C)',
+      'segAC=Segment(A,C)',
+      'F=Point(Segment(C,D))', // 无参数形式 = 可沿路径拖动的标准路径点（⚠️ 实测：SetValue(F,数值) 会把 F 改写成复数 4+0i 致构造断裂；带参数 Point(path,0.5) 是固定参数点拖不动——两种都弃用）
+      'F0=Point(Segment(C,D), 0.7320508075688773)', // 精确位置标记点 F′（AE=AC ⇔ 路径参数 √3−1≈0.732，文档化命令必生效）
+      'rAF=Ray(A,F)',
+      'lDE=Line(D,gAC)',                 // 过 D 作 AC 的平行线
+      'E=Intersect(rAF,lDE)',
+      'ce=Segment(C,E)', 'cf=Segment(C,F)',
+      'dCE=Distance(C,E)', 'dCF=Distance(C,F)',
+      'dAE=Distance(A,E)', 'dAC=Distance(A,C)'
+    ];
+    cmds.forEach(c => { try { app.evalCommand(c); } catch (e) { console.warn('cmd fail: ' + c, e); } });
+    // 样式：CE 红粗、CF 蓝粗；隐藏辅助线标签
+    app.evalCommand('SetColor(ce, 0.84, 0.2, 0.2)');
+    app.evalCommand('SetColor(cf, 0.16, 0.44, 0.86)');
+    app.evalCommand('SetThickness(ce, 4)');
+    app.evalCommand('SetThickness(cf, 4)');
+    app.evalCommand('SetThickness(segAC, 2)');
+    app.evalCommand('ShowLabel(gAC, false)');
+    app.evalCommand('ShowLabel(sq, false)');
+    app.evalCommand('ShowLabel(segAC, false)');
+    app.evalCommand('ShowLabel(lDE, false)');
+    app.evalCommand('ShowLabel(rAF, false)');
+    app.evalCommand('ShowLabel(ce, false)');
+    app.evalCommand('ShowLabel(cf, false)');
+    // F′ 标记：灰色小点（目标位置指示）
+    app.evalCommand('SetColor(F0, 0.55, 0.55, 0.55)');
+    app.evalCommand('SetPointSize(F0, 2)');
+    app.evalCommand('SetCaption(F0, "F′")');
+    // 动态读数（容差判断，避免浮点边界；IsDefined 保护初始退化态 F=C 时 E 未定义）
+    app.evalCommand('T3=Text(If(IsDefined(dCE), If(abs(dCE-dCF)<0.05, "✓ CE = CF  成立", "✗ CE ≠ CF"), "拖 F 生成图形"), (-0.6, 4.6))');
+    // ⚠️ 实测此 build 的 Round(x,4) 参与字符串 + 拼接会令 Text 成空串；直接拼接数值对象正常
+    app.evalCommand('T1=Text(If(IsDefined(dCE), "CE = " + dCE + "　CF = " + dCF, "先把 F 沿 CD 拖离 C 端"), (-0.6, 5.1))');
+    app.evalCommand('T2=Text(If(IsDefined(dAE), "AE = " + dAE + "　AC = " + dAC, ""), (-0.6, 5.6))');
+    app.evalCommand('T4=Text(If(IsDefined(dAE), If(abs(dAE-dAC)<0.05, "✓ AE = AC（条件满足）", "把 F 拖到 F′"), "目标：把 F 拖到灰色 F′"), (-0.6, 6.1))');
+    // 视口：先按当前视图设一次（真实宽高比待 setPerspective 后由 setView 修正）
+    try { setView(app); } catch (e) {}
+  }
+
+  // ── 视口修正（坐标比例 bug 终版）──
+  // 根因：classic 布局左侧代数窗面板占 40% 宽 → 绘图视图被挤成 458×558（元素 780×558），
+  // setCoordSystem 只设世界范围，scale/yscale 按画布拉伸 → 1x=45.8px vs 1y=77.8px（正方形变长方形）。
+  // 修复：① setPerspective 把 divider 0.4→0 隐藏左面板 → 绘图视图占满（770×558）
+  //       ② 从 XML 读真实视图 <size>，世界 Y 跨度 = X 跨度 × h/w → scale==yscale → 像素上 1x==1y（正方形）
+  function setView(app) {
+    try {
+      var w = 458, h = 558;
+      var m = String(app.getXML() || '').match(/<euclidianView>[\s\S]*?<size width="([\d.]+)" height="([\d.]+)"/);
+      if (m) { w = parseFloat(m[1]); h = parseFloat(m[2]); }
+      var spanX = 10;                       // x: -2..8
+      var spanY = spanX * h / w;            // 按真实视图宽高比 → 像素等比
+      var ymid = 3.3;
+      app.setCoordSystem(-2, 8, ymid - spanY / 2, ymid + spanY / 2);
+    } catch (e) {}
+  }
+
+  var parameters = {
+    // appName 不设（classic）：构造命令完整支持；左侧代数窗面板用 setPerspective(divider 0.4→0) 隐藏（实测生效，见 appletOnLoad）
+    width: 780, height: 560,
+    showToolBar: false,
+    showMenuBar: false,
+    showAlgebraInput: false,
+    showResetIcon: true,
+    enableLabelDrags: false,
+    enableShiftDragZoom: true,
+    enableRightClick: false,
+    showZoomButtons: false,
+    language: 'zh',
+    capture3DIcons: false,
+    appletOnLoad: function (api) {
+      // deployggb 会把 applet API 作为参数传入；直接用参数，避免作用域问题
+      try { buildFigure(api); } catch (e) { console.error('buildFigure fail:', e); }
+      // 隐藏左侧代数窗面板（divider 0.4→0，实测生效）→ 绘图视图占满画布宽
+      try { api.setPerspective(String(api.getPerspectiveXML() || '').replace(/divider="0\.4"/, 'divider="0"')); } catch (e) {}
+      // 面板重排后按真实视图尺寸设置等比视口（延迟重设两次，确保布局稳定）
+      setTimeout(function () { try { setView(api); } catch (e) {} }, 800);
+      setTimeout(function () { try { setView(api); } catch (e) {} }, 2500);
+    }
+  };
+  window.addEventListener('load', function () {
+    if (window.GGBApplet) {
+      new GGBApplet(parameters, true).inject('ggb-element');
+    } else {
+      document.getElementById('ggb-element').innerHTML =
+        '<p style="padding:24px;color:#d63c3c">GeoGebra 加载失败（deployggb.js 未就绪，网络受限时请稍后重试）</p>';
+    }
+  });
+</script>
+</body>
+</html>
