@@ -157,6 +157,7 @@ button.stopb:hover { background:#fdf2f2; }
   <section class="panel">
     <div class="gg-head">
       <span>📐 GeoGebra 工具工作台</span>
+      <button class="ghostc" id="btn-rebuild-construct" style="display:none" title="清空画布并按模型构造命令还原（拖动动态点后可一键还原）">↻ 还原构造</button>
       <span class="sub">工具调用（ggb_eval / ggb_query）直接作用于本画布</span>
     </div>
     <div class="gg-body">
@@ -2171,6 +2172,7 @@ var running = false;
 var abortCtrl = null;
 var lastJson = null;
 var reasoningReturnOK = true;   // DSH serializeAssistant 同款：assistant 消息回传 reasoning_content（模型能看到自己的上轮思考链 → 连续推理不从头来）；API 不支持时 400 自动关闭
+var constructLog = [];          // 模型成功执行的 ggb_eval 构造命令（按序记录；"↻ 还原构造"用——拖动动态点后可一键还原）
 function hasReasoningInMessages(msgs) {
   return (msgs || []).some(function (m) { return m && m.role === 'assistant' && !!m.reasoning_content; });
 }
@@ -2184,6 +2186,27 @@ function stripReasoningFromMessages(msgs) {
     return m;
   });
 }
+// "↻ 还原构造"：清空画布并按模型成功执行的构造命令重放（拖动动态点后的还原入口）
+function rebuildFromConstruct() {
+  if (!ggbApi || !constructLog.length) return;
+  try {
+    clearConstruct(ggbApi);
+    for (var i = 0; i < constructLog.length; i++) {
+      try { ggbApi.evalCommand(constructLog[i]); } catch (e) {}
+    }
+    addSys('↻ 已还原初始构造（重放 ' + constructLog.length + ' 条构造命令；动态点回到模型定义位置）');
+  } catch (e) {
+    addErr('还原失败：' + String(e.message || e));
+  }
+}
+function updateRebuildBtn() {
+  var btn = document.getElementById('btn-rebuild-construct');
+  if (btn) btn.style.display = constructLog.length ? '' : 'none';
+}
+(function initRebuildBtn() {
+  var btn = document.getElementById('btn-rebuild-construct');
+  if (btn) btn.addEventListener('click', rebuildFromConstruct);
+})();
 
 function buildUserContent(text) {
   // 有图 → 图像直传（模型直接看图，含图上文字与几何标记）；无图则纯文字
@@ -2210,6 +2233,8 @@ async function runReAct(text) {
   if (running) return;
   running = true;
   reasoningReturnOK = true; // 每次运行重置：reasoning_content 回传默认开启，API 400 时自动关闭
+  constructLog = [];        // 新题目：清空构造记录，"↻ 还原构造"按钮隐藏
+  updateRebuildBtn();
   abortCtrl = new AbortController();
   setBusy(true);
   var cfg = getConfig();
@@ -2413,6 +2438,11 @@ var toolRound = 0;
             if (dm) definedObjects[dm[1]] = true;
           }
         });
+        // 构造命令记录（"↻ 还原构造"数据源：拖动动态点后可一键还原初始构造）
+        roundAudit.forEach(function (ra) {
+          if (ra.ok && ra.name === 'ggb_eval' && ra.cmd) constructLog.push(ra.cmd);
+        });
+        updateRebuildBtn();
         addSys('🔧 工具调用完成（' + res.toolCalls.length + ' 条），继续推理…');
         var hasQuery = res.toolCalls.some(function (tc) { return (tc.name || '') === 'ggb_query'; });
         var hasCalc = res.toolCalls.some(function (tc) { return (tc.name || '') === 'student_calc' || (tc.name || '') === 'student_solve'; });
