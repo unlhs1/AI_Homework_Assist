@@ -95,8 +95,21 @@ button.stopb:hover { background:#fdf2f2; }
 /* ── 右侧：GGB 工具工作台 ── */
 .gg-head { padding:9px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; font-size:13px; color:var(--accent); font-weight:600; }
 .gg-head .sub { margin-left:auto; color:var(--sub); font-size:11px; font-weight:400; }
-.gg-body { flex:1; padding:12px; min-height:0; overflow:auto; }
-#ggb-element { width:100%; height:100%; min-height:480px; border:1px solid #e8ebf2; border-radius:8px; overflow:hidden; }
+.gg-body { flex:1; padding:12px; min-height:0; overflow:hidden; display:flex; gap:12px; }
+/* ── 图旁讲解面板（解题步骤在图旁边；导师要求：讲解放在图附近）── */
+.teach-wrap { width:42%; min-width:230px; max-width:46%; display:none; flex-direction:column; min-height:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:var(--panel); }
+.teach-wrap.show { display:flex; }
+.teach-head { padding:8px 10px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; font-size:13px; color:var(--accent); font-weight:600; background:var(--panel); }
+.teach-head .sub { margin-left:auto; color:var(--sub); font-size:11px; font-weight:400; }
+.teach-head .ghostc { font-size:11px; padding:2px 8px; }
+.teach-body { flex:1; min-height:0; overflow:auto; padding:10px 12px; font-size:13px; line-height:1.75; }
+.teach-body h1, .teach-body h2, .teach-body h3 { font-size:13.5px; margin:9px 0 4px; color:var(--ink); }
+.teach-body p { margin:6px 0; }
+.teach-body ul { margin:5px 0; padding-left:18px; }
+.teach-body li { margin:3px 0; }
+.teach-body .answer-box { margin-top:8px; }
+.gg-col { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
+#ggb-element { width:100%; height:100%; min-height:480px; flex:1; border:1px solid #e8ebf2; border-radius:8px; overflow:hidden; }
 .gg-note { margin-top:9px; font-size:11.5px; color:var(--sub); line-height:1.6; display:none; }
 .gg-note b { color:var(--ink); }
 .footer-note { margin-top:6px; font-size:11px; color:var(--sub); }
@@ -160,9 +173,15 @@ button.stopb:hover { background:#fdf2f2; }
       <span class="sub">工具调用（ggb_eval / ggb_query）直接作用于本画布</span>
     </div>
     <div class="gg-body">
-      <div id="ggb-element"></div>
-      <div class="gg-note" id="ggb-note"></div>
-      <div class="footer-note">由 <a href="https://www.geogebra.org" target="_blank" rel="noopener">GeoGebra</a> 开源内核嵌入（webSimple，deployggb.js）。KaTeX 公式渲染为本地副本。</div>
+      <div class="teach-wrap" id="teach-wrap">
+        <div class="teach-head"><span>📖 解题步骤</span><span class="sub">图旁讲解</span><button class="ghostc" id="teach-fold">收起 ▾</button></div>
+        <div class="teach-body" id="teach-body"></div>
+      </div>
+      <div class="gg-col">
+        <div id="ggb-element"></div>
+        <div class="gg-note" id="ggb-note"></div>
+        <div class="footer-note">由 <a href="https://www.geogebra.org" target="_blank" rel="noopener">GeoGebra</a> 开源内核嵌入（webSimple，deployggb.js）。KaTeX 公式渲染为本地副本。</div>
+      </div>
     </div>
   </section>
 </main>
@@ -1339,7 +1358,9 @@ var SYSTEM_PROMPT = [
   '【做一步看一步（草稿纸纪律）】代数推导必须拆成小步：一步＝一次 student_calc/student_solve 调用（如：先展开、再代入、再化简、再解方程，每一步单独调用一次并等结果）。每步结果自动写进草稿档案（📓 第N步）；推导前用 scratch_paper 看档；发现哪步错了用 scratch_rollback(id) 回滚到对的那步重算——模拟真实算草纸的"改一步再算"。**禁止**在一条消息里脑内连算多步再一次性抛出，**禁止**脑内替草稿纸运算。',
   '',
   '【GeoGebra 构造要点】',
+  '- 🔑【代数式必须上图（硬性要求，导师检查标准）】画布上必须能看到**代数式与结论**：每个关键量（距离/角度/面积/关键对象）都要用 Text(...) 显示在图形旁边（坐标选不遮挡顶点与线的位置），并且用 If(IsDefined(...)) 保护初始退化态（如 Text(If(IsDefined(dCE), "CE = " + dCE, "拖动 F 后显示"), (0.1,1.15))）；关键**代数式文本**也要上图（如 Text("CF = (√3−1)·DC", …)、Text("t²+2t−2=0 ⟹ t=√3−1", …)）；最终结论必须上图（如 Text("CE=CF ✓", …)）。画布上"有图无字"=不合格。',
   '- 平行线必须"两件套"：先定义方向直线（如 l1=Line(A,B)），再过定点和该直线作平行线（如 l2=Line(P,l1)）。禁止 Line(P, A+B)（A+B 是点向量和，可能恰好等于某点→线未定义或不平行）、禁止 Line(P, AB)（AB 未定义对象）。',
+  '- 🖐【可拖动演示（硬性要求）】题中的**动点必须可拖动**：用无参数 Point(路径)（如 F=Point(Segment(C,D))）创建，禁止 Point(路径,参数) 固定写法；图形中连接关系（动点+线+读数）要联动——拖动动点，线/交点/读数同步变化。画布视图本身可拖拽平移、滚轮缩放（默认支持），建议构造完成后再把视图调到一个能看清"整体图形+全部 Text"的视角。',
   '- 有 Distance 必须同时画对应 Segment（如 segXY=Segment(X,Y)，否则图上没有连线）。',
   '- 动态读数：dXY=Distance(X,Y) 等距离对象 + Text(If(IsDefined(dXY), "dXY = " + dXY, "初始提示语"), 坐标) 形式的提示文字。提示必须是 Text(...) 对象（裸 If 表达式不会显示），必须用 If(IsDefined(...)) 保护初始退化态（动点在路径端点时相关对象未定义）；不要用 Round 参与字符串拼接（实测拼接会变空串）。',
   '- 结论判断容差 0.05（如 |dXY-dUW|<0.05 即成立）。坐标比例已在页面层修正（1:1），无需在命令里处理。',
@@ -2578,6 +2599,7 @@ var toolRound = 0;
   if (bodyText.trim().length >= 40) {
     // 讲解正文直接渲染（Markdown + KaTeX）；JSON 附注仅提取 view/note/answer 应用展示
     if (roundAsst) { roundAsst.ensureAnswer(); renderMarkdownTo(roundAsst.answerEl, bodyText); }
+    renderTeachPanel(bodyText, json); // 同步到右侧图旁讲解面板（导师要求：解题步骤放在图旁边）
     if (json) {
       lastJson = json;
       if (json.ggb && json.ggb.view && ggbApi) { try { setView(ggbApi, json.ggb.view); } catch (e) {} }
@@ -2613,6 +2635,7 @@ var toolRound = 0;
       var b2 = stripFencedJson(t2);
       if (b2.trim().length >= 40) {
         asst2.ensureAnswer(); renderMarkdownTo(asst2.answerEl, b2);
+        renderTeachPanel(b2, j2);
         if (j2) { lastJson = j2; renderJsonAppendix(asst2, j2); }
         addSys('✅ 完成：讲解已渲染（画布保持工具真实构造结果）');
       } else if (j2) {
@@ -2726,6 +2749,37 @@ function renderMarkdownTo(el, md) {
   renderKaTeX(el);
   scrollBottom(true);
 }
+// 讲题稿渲染到右侧"图旁讲解"面板（导师要求：解题步骤放在图旁边）
+function renderTeachPanel(mdText, json) {
+  var wrap = document.getElementById('teach-wrap');
+  var body = document.getElementById('teach-body');
+  if (!wrap || !body) return;
+  renderMarkdownTo(body, mdText);
+  if (json && (json.answer || json.ggb && json.ggb.note)) {
+    var h = '';
+    if (json.answer) h += '<div class="answer-box">结论：' + esc(json.answer) + '</div>';
+    if (json.ggb && json.ggb.note) h += '<div class="tip"><b>演示：</b>' + esc(json.ggb.note) + '</div>';
+    if (h) {
+      var d = document.createElement('div');
+      d.innerHTML = h;
+      body.appendChild(d);
+      renderKaTeX(d);
+    }
+  }
+  wrap.classList.add('show');
+  scrollBottom(true);
+}
+// 图旁讲解面板：折叠/展开控制
+(function initTeachPanel() {
+  var btn = document.getElementById('teach-fold');
+  var body = document.getElementById('teach-body');
+  if (!btn || !body) return;
+  btn.addEventListener('click', function () {
+    var hidden = body.style.display === 'none';
+    body.style.display = hidden ? '' : 'none';
+    btn.textContent = hidden ? '收起 ▾' : '展开 ▸';
+  });
+})();
 // JSON 附注（answer/conditionSource/figureNote/ggb.note）追加在讲解正文下方
 function renderJsonAppendix(asst, json) {
   if (!asst || !asst.answerWrap) return;
