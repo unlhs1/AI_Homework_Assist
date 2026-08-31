@@ -45,8 +45,8 @@ tutor-demo/
 ## 快速开始
 
 ```bash
-# 无需构建（纯静态页面）
-python -m http.server 8123 --directory tutor-demo
+# 无需构建（纯静态页面）；仓库根目录即应用根
+python -m http.server 8123
 # 打开
 # http://127.0.0.1:8123/ai/index.html
 ```
@@ -54,7 +54,13 @@ python -m http.server 8123 --directory tutor-demo
 1. 右上角 ⚙ 设置：选择预设（DeepSeek / 百炼 / OpenAI）或填任意 OpenAI 兼容端点 + API Key。
 2. 配置学段定性通道（可选，填轻量模型走专用通道）。
 3. 上传题目图片 / 输入文本 → 「开始」。
-4. 左侧看思考/工具/讲题稿，右侧 GeoGebra 画布为工具工作台（构造与读数实时执行）。
+4. 左侧看思考/工具/讲题稿，右侧 GeoGebra 画布为工具工作台（构造与读数实时执行；动态点可拖动、图上代数式随点联动，完成后可「↻ 还原构造」）。
+
+## 运行依赖
+
+- 本地：全部页面、KaTeX 公式渲染、学生草稿纸计算引擎、GeoGebra 启动器（deployggb.js，`gg/lib/geogebra-webSimple/`）。
+- 联网：GeoGebra 内核组件（webSimple/web3d 引擎）由 `geogebra.org` CDN 首次加载（约数 MB，之后浏览器缓存）。纯静态托管时确保能访问该 CDN 即可（如本地需挂代理，浏览器走系统代理）。
+- LLM：调用方自备 OpenAI 兼容 API Key（DeepSeek / 百炼 / OpenAI 等），仅存浏览器 localStorage，不经过任何服务端。
 
 ## 设计要点（与 DeepSeek Harness 对齐的部分）
 
