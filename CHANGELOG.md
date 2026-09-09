@@ -87,3 +87,9 @@ GeoGebra web3d-0.js 在 demo 异步初始化中被快节奏点击+Escape 打断�
 
 - 三绿：e2e 16/16 + ui_smoke 8/8 + smoke 12/12
 - 四图人审过：y-up 塔尖朝上底面在下、虚线 PD/红色高线 PA/辅助点 H 清晰不喧宾夺主、cube 六色无回归
+
+### 思考提速（主人反馈"雷霆大思考、loop 太久"，晚）
+
+- **默认思考档位 high→low**：maxTokens 32000→4000、reasoning_effort medium→low、提示词≤200 字短思考。设置抽屉默认选中 low，getThinkLevel 兜底同步 low（原兜底 high 是 loop 慢的元凶）
+- SYSTEM_PROMPT【节奏控制】升级为【思考块限额（强制）】：思考块≤6 行、只写"当前局面→下一步动作"；长篇推演/罗列多方案/重复读题明令禁止——推导交给工具（草稿纸/画布），思考只做决策
+- ui_smoke T6 修健壮：动态选一个与当前值不同的 option（selected 移到 index1 后固定 index:1 切换会误判 no change）；8/8 绿

@@ -217,11 +217,11 @@ button.stopb:hover { background:#fdf2f2; }
     <label>模型名</label>
     <input type="text" id="stage-model" placeholder="qwen3.5-omni-plus-2026-03-15" />
     <h3>🧠 思考强度（推理预算）</h3>
-    <div class="hint">以模型 API 层参数控制推理深度（<b>reasoning_effort</b>：low/medium/high，百炼 qwen 还有 <b>enable_thinking</b> 可关思考），同时配 max_tokens 预算与提示词。off=快速行动（百炼模型可关闭思考）；low=轻度；high=深度（默认）；max=极致（充分推演+多方案）。任何档位代数计算仍走草稿纸，不脑内算。</div>
+    <div class="hint">以模型 API 层参数控制推理深度（<b>reasoning_effort</b>：low/medium/high，百炼 qwen 还有 <b>enable_thinking</b> 可关思考），同时配 max_tokens 预算与提示词。off=快速行动（百炼模型可关闭思考）；low=轻度（默认）；high=深度；max=极致（充分推演+多方案）。任何档位代数计算仍走草稿纸，不脑内算。</div>
     <select id="think-strength">
       <option value="off">off · 快速行动（思考数句直接调工具）</option>
-      <option value="low">low · 轻度（短思考即行动）</option>
-      <option value="high" selected>high · 深度（较充分推演）</option>
+      <option value="low" selected>low · 轻度（短思考即行动）</option>
+      <option value="high">high · 深度（较充分推演）</option>
       <option value="max">max · 极致（充分推演+多方案，耗时较长）</option>
     </select>
     <h3>📚 上下文长度（token 预算，默认 1M）</h3>
@@ -1451,7 +1451,7 @@ var SYSTEM_PROMPT = [
   '【最终输出——讲题，不是 JSON】最终轮输出的是**直接给学生看的教学讲解正文**，用 Markdown：分段小标题（###）、要点（- ）、KaTeX 公式（行内 $...$、块级 $$...$$）、自然段——把「审题（含隐含条件从哪来）→ 解题思路 → 每一步推导（引用草稿纸 student_calc/student_solve 的精确结果与画布 ggb_query 读数的验证）→ 验证说明 → 结论」完整讲清楚，是能照着讲给学生的讲题稿。讲解**末尾**可附一个可选 ```json 附注块（没有额外数据可以不附）：{ "answer":"一句话结论", "conditionSource":"每个条件的出处说明（引用题干原文片段+位置；隐含前提注明\"由结论反推\"）", "figureNote":"图形结构描述", "ggb":{"commands":["A=(0,0)", ...实际成功执行的构造命令(可拖点/联动链/Text 全含)，供画布 JSON 恢复...],"view":{"xmin":..,"xmax":..,"ymin":..,"ymax":..},"note":"演示提示（如：拖动 F 观察…）"} }——**ggb.commands 建议给出**（页面用它在拖动后一键恢复画布；你的实际构造命令从执行历史誊抄即可，含 Point(路径) 可拖式与 Text 读数命令）；正文绝不允许是裸 JSON 或 JSON 包裹讲解。',
   '',
   '【强制流程（务必遵守）】每一轮请求都必须实际调用工具：要么 ggb_eval 构造/补构造，要么 ggb_query 验证/核对；构造与查询要搭配（一轮里至少 1 条 ggb_query，除非画布还没东西可查）。如果某一轮结束没有任何工具调用且还没输出最终讲解正文，下一轮必须继续调用工具，不许跳过工具直接结束，更不许空转长篇推理。工具参数必须完整：ggb_eval 必须带 command（如 {"command":"A=(0,4)"}），ggb_query 必须带 names（如 {"names":"A,B,dAB","mode":"value"}）。',
-  '【节奏控制】思考块要短而准，把推导交给画布验证：每轮工具调用建议 3-8 条（含至少 1 条 ggb_query）；一轮里已执行 ≥1 条工具调用就继续下一轮。最终讲解里的每一步推导都要有依据：草稿纸 student_calc/student_solve 的精确结果、ggb_query 的真实读数（结论量如 |dXY-dUW|<0.05 成立要有最后一次 ggb_query 读数支撑）。',
+  '【节奏控制·思考块限额（强制）】思考块必须短（≤6 行）：每轮只写"当前局面 → 下一步动作"（如"底面已建，下一步求 P 坐标 → 调 student_calc"）。**禁止**思考块长篇推演、罗列多方案、重复读题——思考冗长=每轮 1-2 分钟=整体 loop 超时的元凶；推导交给工具（student_calc/student_solve/ggb_query），思考只做决策。每轮工具调用建议 3-8 条（含至少 1 条 ggb_query）；一轮里已执行 ≥1 条工具调用就继续下一轮。最终讲解里的每一步推导都要有依据：草稿纸 student_calc/student_solve 的精确结果、ggb_query 的真实读数（结论量如 |dXY-dUW|<0.05 成立要有最后一次 ggb_query 读数支撑）。',
   '【查询是完成证明的复核环节（不可省略）】仅仅画图不算完成任务：**必须至少有一次 ggb_query 调用，实际读到关键量的真实数值**（如各对象距离/坐标），用它**复核**定理证明的结论（数值与定理结论一致即通过）。但再次强调：读数只用于复核，**证明文字必须由定理链构成**。若你的一次响应里连续两轮都没有 ggb_query（只有 ggb_eval 或只有思考），就会被视为未验证——输出最终讲解前最后一轮必须包含 ggb_query。'
 ].join('\n');
 
@@ -1476,7 +1476,7 @@ var THINK_LEVELS = {
 };
 function getThinkLevel() {
   var v = document.getElementById('think-strength').value;
-  return THINK_LEVELS[v] || THINK_LEVELS.high;
+  return THINK_LEVELS[v] || THINK_LEVELS.low; // 默认轻度：短思考快行动（loop 提速）；要深思在设置里手动选 high/max
 }
 function saveThinkLevel() {
   try { localStorage.setItem('tutorreel_think', document.getElementById('think-strength').value); } catch (e) {}

@@ -104,9 +104,14 @@ if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
     const opts = await s.$$('option');
     if (opts.length < 2) { selOk = false; selDetail += ' (thin options)'; continue; }
     const v0 = await s.inputValue();
-    await s.selectOption({ index: 1 });
+    // 动态选一个与当前值不同的 option（selected 可能在任意 index，固定 index:1 会撞上 selected=low 档 → 误判 no change）
+    const vals = [];
+    for (const o of opts) vals.push(await o.getAttribute('value'));
+    const curIdx = Math.max(0, vals.indexOf(v0));
+    const otherIdx = curIdx === 0 ? 1 : 0;
+    await s.selectOption({ index: otherIdx });
     const v1 = await s.inputValue();
-    await s.selectOption({ index: 0 }).catch(() => {});
+    await s.selectOption({ index: curIdx }).catch(() => {});
     if (v1 === v0 && opts.length > 1) { selOk = false; selDetail += ' (no change)'; }
   }
   T('T6 selects switchable', selOk, selDetail);
