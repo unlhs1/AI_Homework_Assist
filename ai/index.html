@@ -2325,8 +2325,7 @@ async function runReAct(text) {
   var hasGeoWords = /正方形|三角形|平行四边|梯形|矩形|菱形|圆|半径|圆心|直径|弦|弧|线段|边[ABCFDEl]|顶点|对角线|平行|垂直|延长|交于|求证|证明/.test(text || '');
   var solveMode = (hasFigureHint || hasGeoWords) ? 'specific' : 'general';
   // 立体几何/空间题检测（3D → 强制用 geo3d，禁止用 ggb 2D 当成果图）
-  var is3D = /(空间|立体|棱[锥柱台]|圆锥|圆柱|球|四面体|多面体|几何体|三视图|二面角|体积|表面积|异面 |空间向量|⊥|垂直于|平行于平面|平面[ABCDEFGPQ]\b|到[平直]面.*的距离|平面.*[ABCDEFGPQ].*距离)/.test(text || '') ||
-             (currentImage ? /(棱|锥|柱|球|几何体|空间|立体|三视图)/.test('') : false);
+  var is3D = /(空间|立体|棱[锥柱台]|圆锥|圆柱|四面体|多面体|几何体|三视图|二面角|体积|表面积|异面 |空间向量|空间坐标系|平面[ABCDEFGPQ]\b|到[平直]面.*的距离|平行于平面)/.test(text || '');
   addSys(solveMode === 'specific'
     ? '🖼 题型模式：图模式 · 特定解（以图为先，结论在指定构型下成立，禁止泛化解）'
     : '📄 题型模式：文本模式 · 泛化解（对满足条件的情形成立，禁止虚构图形）');
