@@ -266,6 +266,19 @@
       });
     }
     if (currentQuat) viewer.group.quaternion.copy(currentQuat);
+    frameSolid();
+  }
+  // 自动取景：按立体包围盒中心+尺寸设置相机，画面完整居中不裁切
+  function frameSolid() {
+    if (!viewer || !viewer.group) return;
+    var box;
+    try { box = new THREE.Box3().setFromObject(viewer.group); } catch (e) { return; }
+    var c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+    var maxS = Math.max(s.x, s.y, s.z) || 2.2;
+    viewer.camDist = Math.max(3.4, maxS * 2.1);
+    var dir = new THREE.Vector3(3.4, 3.1, 4.4).normalize();
+    viewer.camera.position.copy(c.clone().add(dir.clone().multiplyScalar(viewer.camDist)));
+    viewer.camera.lookAt(c);
     renderViewer();
   }
   // 把当前 3D 画面渲染成 PNG，作为图片消息发进会话（图片传输通道）
