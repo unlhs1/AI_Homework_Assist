@@ -1206,10 +1206,10 @@ function updateScratchBadge() {
 var TOOLS = [
   { type:'function', function:{ name:'ggb_eval',
     description:'在 GeoGebra 画布执行一条构造命令（evalCommand），用于逐步构造图形：点 A=(0,4)、面 Polygon(A,B,C,D)、线 Line(A,C)、平行线 Line(D,gAC)、动点 Point(Segment(C,D))、射线 Ray(A,F)、交点 Intersect(rAF,lDE)、线段 Segment(C,E)、距离 Distance(C,E)、动态文字 Text(...)、样式 SetColor/SetThickness/ShowLabel。每次一条命令。',
-    parameters:{ type:'object', properties:{ command:{ type:'string', description:'要执行的 GeoGebra 命令，如 "E=Intersect(rAF,lDE)"' } }, required:['command'] } } },
+    parameters:{ type:'object', properties:{ command:{ type:'string', description:'要执行的 GeoGebra 命令，如 "E=Intersect(rAF,lDE)"' }, view:{ type:'string', enum:['2d','3d'], description:'2d=平面(默认)；3d=在 GeoGebra 3D 画布构造立体（Cube/Polyhedron/多面体/3D 点等）' } }, required:['command'] } } },
   { type:'function', function:{ name:'ggb_query',
     description:'查询 GeoGebra 画布当前状态，用于验证构造结果。mode=value 返回对象数值（如某距离对象的数值），mode=defined 返回对象是否已定义。',
-    parameters:{ type:'object', properties:{ names:{ type:'string', description:'对象名，逗号分隔，如 "A,B,dAB"' }, mode:{ type:'string', enum:['value','defined'], description:'value=取数值（默认）；defined=是否已定义' } }, required:['names'] } } },
+    parameters:{ type:'object', properties:{ names:{ type:'string', description:'对象名，逗号分隔，如 "A,B,dAB"' }, mode:{ type:'string', enum:['value','defined'], description:'value=取数值（默认）；defined=是否已定义' }, view:{ type:'string', enum:['2d','3d'], description:'2d=平面画布(默认)；3d=GeoGebra 3D 画布' } }, required:['names'] } } },
   { type:'function', function:{ name:'student_calc',
     description:'学生草稿纸：模拟学生手算的精确计算引擎（浏览器本地执行，不需画布）。输入数学表达式，返回精确手算结果与步骤对照。支持：分数/根式（√18→3√2，√5 保留 √5，1/√2→√2/2，分母有理化）、π、特殊角三角（sin/cos/tan 只能取表内角 0/15/30/45/60/75/90/105/120/135/150/165/180，sin75° 得 (√6+√2)/4 精确式）、多项式展开与合并（(x+1)(x+2)→x²+3x+2）、按普通变量代入化简（vars 如 {"x":"3"}）。**通用角三角函数/反三角/对数等学生手算不可达的操作会明确报错**——你应该改用特殊角或定理。**这是你算不精确时的"手"，别脑内暴力算**。返回 {exact, approx?}，exact 是手写精确式，approx 仅供画布复核。',
     parameters:{ type:'object', properties:{ expr:{ type:'string', description:'表达式，如 "(x+1)(x+2)" 或 "√18" 或 "sin(75)"' }, vars:{ type:'object', description:'可选代入映射，如 {"x":"3","a":"4"}' } }, required:['expr'] } } },
@@ -1223,8 +1223,8 @@ var TOOLS = [
     description:'回滚学生草稿纸档案：像撕掉草稿纸后面几行一样，删除第 id 步之后（含）的所有演算记录，回到第 id 步的结果继续。算错了一步就回滚到之前对的步骤重算，**不要整段重来更不要脑内重推**。id=0 表示清空全部档案（换一张纸）。返回回滚后剩多少步。',
     parameters:{ type:'object', properties:{ id:{ type:'number', description:'保留到第几步（含），其后全部删除；0=清空' } }, required:['id'] } } }
   ,{ type:'function', function:{ name:'geo3d',
-    description:'3D 立体几何工具（three.js 渲染，浏览器本地执行）：用于【着色多面体 / 相对面 / 三视图 / 相邻面 / 镜像(手性)矛盾】类题目，与 ggb_eval 的平面几何互补。action=solid 设定立方体六面颜色（top/right/front/bottom/left/back 传颜色名，缺省用基准：顶=白、右=绿、前=黑、底=蓝、左=黄、后=红）；action=view 或 orient 把立方体转到某视角（top/right/front 传颜色名，镜像会自动更正并提示）；action=reach 只判断 (top,right,front) 三色能否由同一正方体旋转得到（返回可达性+行列式+若镜像给出更正视角）；action=query 查当前相对面/相邻面/每面颜色；action=reset 恢复基准。**相对面判定**：三视图中从未同时出现的两色必相对；**镜像判定**：某 (顶,右,前) 环绕次序若为左手系（行列式<0）则同一正方体转不出来，是题图画错。',
-    parameters:{ type:'object', properties:{ action:{ type:'string', enum:['solid','view','orient','reach','query','reset'], description:'要执行的动作' }, top:{ type:'string', description:'顶面颜色名' }, right:{ type:'string', description:'右面颜色名' }, front:{ type:'string', description:'前面颜色名' }, bottom:{ type:'string', description:'底面颜色名' }, left:{ type:'string', description:'左面颜色名' }, back:{ type:'string', description:'后面颜色名' } }, required:['action'] } } }
+    description:'3D 立体几何工具（three.js 渲染，浏览器本地执行）：用于【着色多面体 / 相对面 / 三视图 / 相邻面 / 镜像(手性)矛盾】类题目，以及【可上色的常见立体】可视化。action=solid 构建颜色立体：kind=cube/prism/pyramid/tetrahedron/cylinder/cone/sphere（可上色，棱锥/棱柱/四面体逐面上色带面名标签，圆柱/圆锥/球曲面+底面）；cube 额外可用 top/right/front/bottom/left/back 设六面颜色，其余用 palette 数组配色。action=shot 把当前立体渲染成 PNG 图片发进会话（图片传输通道，学生/导师可见）。action=view 转视角；action=reach 判 (top,right,front) 三色能否由同一正方体旋转得到（行列式，镜像给更正视角）；action=query 查相对面/相邻/面名；action=reset 复位。**判相对面**：三视图中从未出现的两色必相对；**判镜像**：(顶,右,前) 环绕次序为左手系（行列式<0）则同一正方体转不出来。',
+    parameters:{ type:'object', properties:{ action:{ type:'string', enum:['solid','shot','shoot','view','orient','reach','query','reset'], description:'要执行的动作' }, kind:{ type:'string', enum:['cube','prism','pyramid','tetrahedron','cylinder','cone','sphere'], description:'立体种类（solid 用）' }, palette:{ type:'array', items:{ type:'string' }, description:'可选：逐面颜色名/配色（solid 用，非 cube）' }, top:{ type:'string', description:'顶面颜色名' }, right:{ type:'string', description:'右面颜色名' }, front:{ type:'string', description:'前面颜色名' }, bottom:{ type:'string', description:'底面颜色名' }, left:{ type:'string', description:'左面颜色名' }, back:{ type:'string', description:'后面颜色名' } }, required:['action'] } } }
 ];
 
 function runGGBTool(name, argsStr) {
@@ -1263,14 +1263,21 @@ function runGGBTool(name, argsStr) {
     var left = scratchRollback(args.id === undefined ? 0 : args.id);
     return { ok:true, result: '📓 草稿已回滚，剩余 ' + left + ' 步（id=' + (args.id || 0) + '）——可基于该步继续，不用脑内重推' };
   }
-  var api = ggbApi;
   if (name === 'geo3d') {
     var g3 = ensureGeo3d();
     if (!g3) return { ok:false, result:'geo3d 引擎未加载' };
     return g3.run(argsStr);
   }
+  var mode3d = (args && args.view) === '3d';
+  if (mode3d) {
+    showView('ggb3d');
+    if (!ggbApi3d) {
+      initGgb3d(function () {});   // 异步加载；下一轮重试即可
+      return { ok:false, result:'GeoGebra 3D 画布正在初始化（web3d 引擎加载中），请下一轮重试（ggb_eval/ggb_query view:"3d"）' };
+    }
+  } else { try { showView('ggb'); } catch (e) {} }
+  var api = mode3d ? ggbApi3d : ggbApi;
   if (!api) return { ok:false, result:'GeoGebra 尚未就绪，请稍候再试' };
-  try { showView('ggb'); } catch (e) {}
   try {
     if (name === 'ggb_eval') {
       var cmd = String(args.command || '').trim();
@@ -1386,7 +1393,8 @@ var SYSTEM_PROMPT = [
   '可用工具：',
   '- ggb_eval：执行一条构造命令（{"command":"..."}），在画布上**真的把图构造出来**。注意：关键动点必须用【无参数】Point(路径)（如 P=Point(Segment(A,B))，把动点放在线段/路径上）——Point(路径,参数) 是固定点拖不动、SetValue(P,数值) 会把路径点改写成复数致构造断裂，两者都禁用。',
   '- ggb_query：查询画布数值/存在性，用于几何推理验证（{"names":"A,B,dAB","mode":"value|defined"}）。value 返回对象数值（距离/坐标/表达式值），defined 返回是否已定义。构造一批后必须用它核对。',
-  '- geo3d：3D 立体几何工具（three.js，本地渲染）。用于**着色多面体/相对面/三视图/相邻面/镜像(手性)矛盾**类题目（如"正方体六个面涂不同颜色，按三视图判断相对面"）。action="reach" 传 top/right/front 三颜色，返回能否由同一正方体旋转得到（含行列式，镜像时给出更正视角）——这是判断题图画没画错的关键；action="query" 查当前相对面/相邻/每面颜色；action="view" 转视角；action="solid" 设定某面颜色。**判断相对面**：三视图中从未同时出现的两色必相对；**判断题图是否镜像画错**：某 (顶,右,前) 环绕次序若为左手系（reach 返回不可达）则同一正方体转不出来。平面几何一律用 ggb_eval/ggb_query；只有立体/上色/三视图才用 geo3d。',
+  '- geo3d：3D 立体几何工具（three.js，本地渲染）。用于**着色多面体/相对面/三视图/相邻面/镜像(手性)矛盾**类题目（如"正方体六个面涂不同颜色，按三视图判断相对面"）。action="reach" 传 top/right/front 三颜色，返回能否由同一正方体旋转得到（含行列式，镜像时给出更正视角）——判断题图画没画错的关键。action="query" 查相对面/相邻/面名；action="view" 转视角；action="solid" 可构建**常见可上色立体**（kind=cube/prism/pyramid/tetrahedron/cylinder/cone/sphere，逐面上色 + 面名标签）；action="shot" 把当前立体渲染成 **PNG 图片发进会话**（图片传输通道，学生/导师直接看得到图——画立体几何/三视图用它出图）。**判相对面**：三视图中从未同时出现的两色必相对；**判镜像**：(顶,右,前) 环绕次序若为左手系（reach 不可达）则同一正方体转不出来。',
+  '- ggb_eval/ggb_query（view:"3d"，GeoGebra 3D 画布）：用于**通用立体几何**（多立方体拼搭求三视图/截面/体积/表面积/任意多面体/3D 点线面），传 view:"3d" 即切到 3D 画布构造（如 Cube(A,B,C)、Polyhedron、3D 点 A=(1,2,3)、平面、向量）。平面几何用 view:"2d"（默认）。**分工**：着色/相对面/三视图/镜像=geo3d；通用立体=ggb view:"3d"；平面=ggb view:"2d"。',
   '- student_calc：学生草稿纸（精确手算引擎）：化简/展开/代入（{"expr":"(x+1)(x+2)"}）→ 返回精确式（√5 保留 √5、√18→3√2、分母有理化、sin75°→(√6+√2)/4）。**凡是需要"算"的代数步骤都必须交给它**（展开、代入化简、根式化简、特殊角三角、合并同类项），不要脑内口算；它报"学生手算不可达"时改用定理/特殊角。',
   '- student_solve：学生草稿纸（方程求解）：（{"eqs":["x^2-3x+2=0"],"vars":["x"]}）→ 精确解（求根公式，带根号/分数的精确解）。解方程/方程组必须用它，禁止脑内暴力解。',
   '- scratch_paper：查看草稿档案（每次 student_calc/student_solve 自动存档为一步：输入→结果）。推导前先回看，避免重复/脑内重推。',
@@ -2224,6 +2232,7 @@ function streamChat(messages, onDelta, opts) {
 // ── 7. ReAct 主循环 ─────────────────────────────────────────
 var conversation = [];          // OpenAI messages（含图 + 工具往返）
 var ggbApi = null;
+var ggbApi3d = null; // GeoGebra 3D applet（懒加载）
 var running = false;
 var abortCtrl = null;
 var lastJson = null;
@@ -2963,6 +2972,28 @@ function buildFromJson(json) {
     noteEl.innerHTML = '<b>演示提示：</b>' + esc(note) + (_note ? '（' + esc(_note) + '）' : '');
     noteEl.style.display = note || _note ? 'block' : 'none';
   }
+}
+// ── GeoGebra 3D applet（懒加载：首次 ggb_eval mode:"3d" 时注入）──
+function initGgb3d(cb) {
+  if (ggbApi3d) { if (cb) cb(true); return; }
+  if (!window.GGBApplet) { if (cb) cb(false); return; }
+  var el = document.getElementById('ggb3d-element');
+  if (!el) { if (cb) cb(false); return; }
+  var parameters = {
+    appName: '3d', width: 780, height: 560,
+    showToolBar: false, showMenuBar: false, showAlgebraInput: false,
+    showResetIcon: true, enableLabelDrags: false, enableShiftDragZoom: true,
+    enableRightClick: false, showZoomButtons: false, language: 'zh',
+    appletOnLoad: function (api) {
+      ggbApi3d = api;
+      try { if (typeof api.setErrorDialogsActive === 'function') api.setErrorDialogsActive(false); } catch (e) {}
+      try { api.setPerspective(String(api.getPerspectiveXML() || '').replace(/divider="0\.4"/, 'divider="0"')); } catch (e) {}
+      if (cb) cb(true);
+      addSys('🧊 GeoGebra 3D 画布就绪（ggb_eval mode:"3d" 将在此构造立体）');
+    }
+  };
+  try { new GGBApplet(parameters, true).inject('ggb3d-element'); }
+  catch (e) { if (cb) cb(false); }
 }
 function initApplet() {
   var parameters = {

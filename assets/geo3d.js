@@ -171,29 +171,107 @@
   }
 
   var FACE_KEYS = ['+X', '-X', '+Y', '-Y', '+Z', '-Z'];
+  var PALETTE = ['#e05a4e', '#4e9be0', '#4ec06a', '#f0c341', '#9a6ee0', '#e08a4e', '#4ed6c0', '#c04e9b', '#8a8f98', '#4e6a9b'];
+  // 常见可上色立体的面定义（顶点数组 + 面名；坐标 Y 为上）。每个面独立成片，可各自上色 + 贴面名标签。
+  function SOLID_FACES(kind) {
+    if (kind === 'prism') {          // 三棱柱
+      return [
+        { name: '下底面', verts: [[-1, 0, -1], [1, 0, -1], [0, 0, 1.3]] },
+        { name: '上底面', verts: [[-1, 2, -1], [0, 2, 1.3], [1, 2, -1]] },
+        { name: '前面', verts: [[-1, 0, -1], [0, 0, 1.3], [0, 2, 1.3], [-1, 2, -1]] },
+        { name: '右面', verts: [[1, 0, -1], [0, 0, 1.3], [0, 2, 1.3], [1, 2, -1]] },
+        { name: '后面', verts: [[-1, 0, -1], [1, 0, -1], [1, 2, -1], [-1, 2, -1]] }
+      ];
+    }
+    if (kind === 'pyramid') {        // 四棱锥
+      return [
+        { name: '底面', verts: [[-1, 0, -1], [1, 0, -1], [1, 0, 1], [-1, 0, 1]] },
+        { name: '前侧面', verts: [[-1, 0, 1], [1, 0, 1], [0, 2.3, 0]] },
+        { name: '右侧面', verts: [[1, 0, -1], [1, 0, 1], [0, 2.3, 0]] },
+        { name: '后侧面', verts: [[1, 0, -1], [-1, 0, -1], [0, 2.3, 0]] },
+        { name: '左侧面', verts: [[-1, 0, -1], [-1, 0, 1], [0, 2.3, 0]] }
+      ];
+    }
+    if (kind === 'tetrahedron') {    // 四面体
+      return [
+        { name: '底面', verts: [[-1, -0.6, -0.9], [1, -0.6, -0.9], [0, -0.6, 1.2]] },
+        { name: '前面', verts: [[-1, -0.6, -0.9], [0, -0.6, 1.2], [0, 1.6, 0]] },
+        { name: '后面', verts: [[1, -0.6, -0.9], [-1, -0.6, -0.9], [0, 1.6, 0]] },
+        { name: '右面', verts: [[1, -0.6, -0.9], [0, -0.6, 1.2], [0, 1.6, 0]] }
+      ];
+    }
+    return null;
+  }
+  function triList(verts) { var o = []; for (var i = 1; i < verts.length - 1; i++) o.push([verts[0], verts[i], verts[i + 1]]); return o; }
+  function faceCentroid(verts) { var x = 0, y = 0, z = 0; verts.forEach(function (v) { x += v[0]; y += v[1]; z += v[2]; }); var n = verts.length; return [x / n, y / n, z / n]; }
+  function faceNormal(verts) { var a = verts[0], b = verts[1], c = verts[2]; var u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]; return [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; }
   function buildSolidView() {
     if (!viewer) return;
     while (viewer.group.children.length) viewer.group.remove(viewer.group.children[0]);
-    var colors = solidState.colors || REF_COLORS;
-    var HALF = 1.0;
-    var mats = FACE_KEYS.map(function (k) {
-      return new THREE.MeshPhongMaterial({ color: hexOf(colors[k] || '#999'), transparent: true, opacity: 0.96, side: THREE.DoubleSide });
-    });
-    var box = new THREE.Mesh(new THREE.BoxGeometry(2 * HALF, 2 * HALF, 2 * HALF), mats);
-    viewer.group.add(box);
-    var edge = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.BoxGeometry(2 * HALF, 2 * HALF, 2 * HALF)),
-      new THREE.LineBasicMaterial({ color: 0x1c2b36, linewidth: 1.4 }));
-    viewer.group.add(edge);
-    FACE_KEYS.forEach(function (k) {
-      var n = norm(k);
-      var mat = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.75), makeLabelMat(colors[k] || ''));
-      mat.position.set(n[0] * (HALF + 0.03), n[1] * (HALF + 0.03), n[2] * (HALF + 0.03));
-      mat.lookAt(new THREE.Vector3(n[0] * (HALF + 1.2), n[1] * (HALF + 1.2), n[2] * (HALF + 1.2)));
-      viewer.group.add(mat);
-    });
+    var kind = solidState.kind || 'cube';
+    if (kind === 'cube') {
+      var colors = solidState.colors || REF_COLORS, HALF = 1.0;
+      var mats = FACE_KEYS.map(function (k) {
+        return new THREE.MeshPhongMaterial({ color: hexOf(colors[k] || '#999'), transparent: true, opacity: 0.96, side: THREE.DoubleSide });
+      });
+      var box = new THREE.Mesh(new THREE.BoxGeometry(2 * HALF, 2 * HALF, 2 * HALF), mats);
+      viewer.group.add(box);
+      viewer.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2 * HALF, 2 * HALF, 2 * HALF)), new THREE.LineBasicMaterial({ color: 0x1c2b36 })));
+      FACE_KEYS.forEach(function (k) {
+        var n = norm(k); var lp = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.75), makeLabelMat(colors[k] || ''));
+        lp.position.set(n[0] * (HALF + 0.03), n[1] * (HALF + 0.03), n[2] * (HALF + 0.03));
+        lp.lookAt(new THREE.Vector3(n[0] * (HALF + 1.2), n[1] * (HALF + 1.2), n[2] * (HALF + 1.2))); viewer.group.add(lp);
+      });
+    } else if (kind === 'cylinder' || kind === 'cone' || kind === 'sphere') {
+      var mg = kind === 'sphere' ? new THREE.SphereGeometry(1.15, 28, 20) : (kind === 'cone' ? new THREE.ConeGeometry(1, 2.4, 32, 1, false) : new THREE.CylinderGeometry(1, 1, 2.4, 32, 1, false));
+      if (kind === 'sphere') {
+        viewer.group.add(new THREE.Mesh(mg, new THREE.MeshPhongMaterial({ color: hexOf('蓝'), transparent: true, opacity: 0.88, side: THREE.DoubleSide })));
+        viewer.group.add(new THREE.Mesh(new THREE.SphereGeometry(1.15, 16, 12), new THREE.MeshBasicMaterial({ wireframe: true, color: 0x1c2b36 })));
+      } else {
+        var mats2 = (mg.groups && mg.groups.length) ? mg.groups.map(function (g, gi) { return new THREE.MeshPhongMaterial({ color: PALETTE[gi % PALETTE.length], transparent: true, opacity: 0.94, side: THREE.DoubleSide }); }) : [new THREE.MeshPhongMaterial({ color: PALETTE[0], transparent: true, opacity: 0.94, side: THREE.DoubleSide })];
+        viewer.group.add(new THREE.Mesh(mg, mats2));
+        viewer.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(mg), new THREE.LineBasicMaterial({ color: 0x1c2b36 })));
+      }
+    } else {
+      var faces = SOLID_FACES(kind);
+      if (!faces) { // 未知 kind 回退到 'cube'
+        solidState.kind = 'cube'; solidState.colors = solidState.colors || REF_COLORS; buildSolidView(); return;
+      }
+      faces.forEach(function (f, fi) {
+        var col = (solidState.palette && solidState.palette[fi]) || PALETTE[fi % PALETTE.length];
+        var pos = []; triList(f.verts).forEach(function (t) { pos.push(t[0][0], t[0][1], t[0][2], t[1][0], t[1][1], t[1][2], t[2][0], t[2][1], t[2][2]); });
+        var geom = new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geom.computeVertexNormals();
+        var mesh = new THREE.Mesh(geom, new THREE.MeshPhongMaterial({ color: col, transparent: true, opacity: 0.94, side: THREE.DoubleSide }));
+        mesh.userData.faceName = f.name; viewer.group.add(mesh);
+        viewer.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geom), new THREE.LineBasicMaterial({ color: 0x1c2b36 })));
+        var ctr = faceCentroid(f.verts), nrm = faceNormal(f.verts);
+        var lp = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.5), makeLabelMat(f.name));
+        lp.position.set(ctr[0] + nrm[0] * 0.06, ctr[1] + nrm[1] * 0.06, ctr[2] + nrm[2] * 0.06);
+        lp.lookAt(new THREE.Vector3(ctr[0] + nrm[0], ctr[1] + nrm[1], ctr[2] + nrm[2])); viewer.group.add(lp);
+      });
+    }
     if (currentQuat) viewer.group.quaternion.copy(currentQuat);
     renderViewer();
+  }
+  // 把当前 3D 画面渲染成 PNG，作为图片消息发进会话（图片传输通道）
+  function postFigure(url, label) {
+    try {
+      var cs = document.getElementById('chat-scroll'); if (!cs) return;
+      var wrap = document.createElement('div'); wrap.className = 'msg assistant figure';
+      var img = document.createElement('img'); img.className = 'm-img'; img.src = url; img.style.maxWidth = '520px'; img.style.maxHeight = '400px'; img.style.borderRadius = '8px'; img.style.border = '1px solid #e3e6ee';
+      wrap.appendChild(img);
+      if (label) { var cap = document.createElement('div'); cap.className = 'fig-cap'; cap.style.fontSize = '12px'; cap.style.color = '#6b7280'; cap.style.marginTop = '4px'; cap.textContent = '🧊 ' + label; wrap.appendChild(cap); }
+      cs.appendChild(wrap); if (typeof scrollBottom === 'function') scrollBottom();
+    } catch (e) {}
+  }
+  function shot() {
+    if (!viewer || !viewer.renderer || !viewer.renderer.domElement) return '3D 视图未初始化（请在浏览器中先 action="solid" 构建立体再截图）';
+    renderViewer();
+    var url = null;
+    try { url = viewer.renderer.domElement.toDataURL('image/png'); } catch (e) { return '截图失败: ' + String(e.message || e); }
+    var k = solidState.kind || 'cube';
+    postFigure(url, (k === 'cube' ? '正方体' : k === 'prism' ? '三棱柱' : k === 'pyramid' ? '四棱锥' : k === 'tetrahedron' ? '四面体' : k === 'cylinder' ? '圆柱' : k === 'cone' ? '圆锥' : k === 'sphere' ? '球' : k) + '（已生成图）');
+    return '已生成立体图并发送到会话（图片传输通道）';
   }
   function orientTo(keys) { // keys=[top,right,front] face keys（非镜像）
     var cols = rotInOrder(keys);
@@ -211,29 +289,40 @@
     var action = args.action || 'query';
     var out;
     if (action === 'solid') {
-      // 设定立方体六面着色：接收 top/right/front/bottom/left/back 颜色名；未指定面用「尚未占用」的基准色补齐（保证六色互异）
-      var setK = { top: '+Y', bottom: '-Y', right: '+X', left: '-X', front: '+Z', back: '-Z' };
-      var explicit = {}, used = {};
-      Object.keys(setK).forEach(function (side) {
-        if (args[side] != null) { var k = setK[side], v = String(args[side]); explicit[k] = v; used[v] = true; }
-      });
-      var c = {};
-      var pool = FACE_KEYS.map(function (k) { return REF_COLORS[k]; });
-      var pi = 0;
-      FACE_KEYS.forEach(function (k) {
-        if (explicit[k]) { c[k] = explicit[k]; }
-        else {
-          while (pi < pool.length && used[pool[pi]]) pi++;
-          var v = pi < pool.length ? pool[pi] : ('c' + (pi + 1));
-          pi++; c[k] = v; used[v] = true;
-        }
-      });
-      solidState.colors = c;
-      solidState.labelToKey = {};
-      Object.keys(c).forEach(function (k) { solidState.labelToKey[c[k]] = k; });
+      // 支持常见可上色立体：kind = cube/prism/pyramid/tetrahedron/cylinder/cone/sphere
+      var kind = args.kind || solidState.kind || 'cube';
+      solidState.kind = kind;
+      if (args.palette) solidState.palette = args.palette;
+      if (kind === 'cube') {
+        // 设定立方体六面着色：接收 top/right/front/bottom/left/back 颜色名；未指定面用「尚未占用」的基准色补齐（保证六色互异）
+        var setK = { top: '+Y', bottom: '-Y', right: '+X', left: '-X', front: '+Z', back: '-Z' };
+        var explicit = {}, used = {};
+        Object.keys(setK).forEach(function (side) {
+          if (args[side] != null) { var k = setK[side], v = String(args[side]); explicit[k] = v; used[v] = true; }
+        });
+        var c = {};
+        var pool = FACE_KEYS.map(function (k) { return REF_COLORS[k]; });
+        var pi = 0;
+        FACE_KEYS.forEach(function (k) {
+          if (explicit[k]) { c[k] = explicit[k]; }
+          else {
+            while (pi < pool.length && used[pool[pi]]) pi++;
+            var v = pi < pool.length ? pool[pi] : ('c' + (pi + 1));
+            pi++; c[k] = v; used[v] = true;
+          }
+        });
+        solidState.colors = c;
+        solidState.labelToKey = {};
+        Object.keys(c).forEach(function (k) { solidState.labelToKey[c[k]] = k; });
+      } else {
+        solidState.colors = null; solidState.labelToKey = null;
+      }
       if (viewer) buildSolidView();
-      out = '已设定正方体六面着色：'
-        + '顶=' + c['+Y'] + '，底=' + c['-Y'] + '，右=' + c['+X'] + '，左=' + c['-X'] + '，前=' + c['+Z'] + '，后=' + c['-Z'];
+      var KIND = { cube: '正方体', prism: '三棱柱', pyramid: '四棱锥', tetrahedron: '四面体', cylinder: '圆柱', cone: '圆锥', sphere: '球' };
+      var nfaces = SOLID_FACES(kind) ? SOLID_FACES(kind).length : 0;
+      out = '已构建可上色' + (KIND[kind] || kind) + (kind === 'cube' ? '（六面着色：顶=' + solidState.colors['+Y'] + '，右=' + solidState.colors['+X'] + '，前=' + solidState.colors['+Z'] + '）' : '（共' + nfaces + '面 / 曲面可上色，可用 action="shot" 生成图片发进会话）');
+    } else if (action === 'shot') {
+      out = shot();
     } else if (action === 'view' || action === 'orient') {
       var r = reachForSolid(solidState, args.top, args.right, args.front);
       if (!r.ok) return { ok: false, result: r.error };
@@ -251,18 +340,23 @@
         ? ('✓ 可达：' + r2.top + '顶·' + r2.right + '右·' + r2.front + '前（行列式=' + r2.det.toFixed(0) + '，右手系）')
         : ('✗ 镜像：' + r2.top + '顶·' + r2.right + '右·' + r2.front + '前 是左手系（行列式=' + r2.det.toFixed(0) + '），同一正方体转不出来。更正应为 ' + r2.correctedTop + '顶·' + r2.correctedRight + '右·' + r2.correctedFront + '前');
     } else if (action === 'query') {
-      var opp = opposites(solidState).map(function (p) { return p.a + '↔' + p.b; }).join('，');
-      var cNow = solidState.colors || REF_COLORS;
-      var viewNow = '{顶=' + cNow['+Y'] + '，右=' + cNow['+X'] + '，前=' + cNow['+Z'] + '}';
-      out = '正方体当前着色：' + viewNow
-        + '；相对面（唯一）：' + opp
-        + '；每面颜色：' + FACE_KEYS.map(function (k) { return k.replace('+', '').replace('-', '-') + ':' + cNow[k]; }).join(' ');
+      var kind = solidState.kind || 'cube';
+      if (kind !== 'cube') {
+        var names = SOLID_FACES(kind) ? SOLID_FACES(kind).map(function (f) { return f.name; }).join('、') : '曲面（曲面/底面）';
+        out = '当前立体：' + kind + '；可上色面：' + names + '；可用 action="shot" 生成图片。';
+      } else {
+        var opp = opposites(solidState).map(function (p) { return p.a + '↔' + p.b; }).join('，');
+        var cNow = solidState.colors || REF_COLORS;
+        out = '正方体当前着色：{顶=' + cNow['+Y'] + '，右=' + cNow['+X'] + '，前=' + cNow['+Z'] + '}'
+          + '；相对面（唯一）：' + opp
+          + '；每面颜色：' + FACE_KEYS.map(function (k) { return k.replace('+', '').replace('-', '-') + ':' + cNow[k]; }).join(' ');
+      }
     } else if (action === 'reset') {
-      solidState.colors = null; solidState.labelToKey = null; currentQuat = null;
+      solidState.kind = 'cube'; solidState.colors = null; solidState.labelToKey = null; solidState.palette = null; currentQuat = null;
       if (viewer) { buildSolidView(); }
-      out = '已重置为基准着色（顶=白，右=绿，前=黑）与基准朝向';
+      out = '已重置为基准正方体（顶=白，右=绿，前=黑）与基准朝向';
     } else {
-      return { ok: false, result: '未知 geo3d action: ' + action + '（可选 solid / view / reach / query / reset）' };
+      return { ok: false, result: '未知 geo3d action: ' + action + '（可选 solid / shoot / shot / view / reach / query / reset）' };
     }
     return { ok: true, result: '🧊 Geo3D · ' + out };
   }
