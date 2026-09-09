@@ -331,7 +331,16 @@
       solidState.kind = kind;
       if (args.palette) solidState.palette = args.palette;
       if (kind === 'poly' && args.verts && args.faces) {
-        solidState.verts = args.verts; solidState.faces = args.faces;
+        // 兼容两种写法：① verts=[[x,y,z]..] + faces=[[vi..]..]（索引）；② verts=[{n,p:[x,y,z]}..] + faces=[[名称..]..]（GeoGebra 式具名点）
+        var v = args.verts, f = args.faces, nameIdx = null, verts = [];
+        if (v.length && typeof v[0] === 'object' && !Array.isArray(v[0]) && v[0].p) {
+          nameIdx = {};
+          v.forEach(function (item, i) { verts.push(item.p.slice(0, 3)); nameIdx[item.n] = i; });
+        } else { verts = v.map(function (p) { return p.slice(0, 3); }); }
+        var faces = f.map(function (face) {
+          return face.map(function (vi) { return (typeof vi === 'string' && nameIdx) ? nameIdx[vi] : vi; });
+        });
+        solidState.verts = verts; solidState.faces = faces;
         solidState.colors = null; solidState.labelToKey = null;
       } else if (kind === 'cube') {
         // 设定立方体六面着色：接收 top/right/front/bottom/left/back 颜色名；未指定面用「尚未占用」的基准色补齐（保证六色互异）

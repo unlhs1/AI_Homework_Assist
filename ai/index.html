@@ -163,8 +163,7 @@ button.stopb:hover { background:#fdf2f2; }
       <span>🛠 工具工作台</span>
       <span class="view-tabs" id="view-tabs" style="margin-left:auto;display:flex;gap:6px">
         <button id="vt-ggb" class="on">📐 平面(2D)</button>
-        <button id="vt-ggb3d" data-kind="ggb3d">🧊 立体(3D)</button>
-        <button id="vt-geo3d" data-kind="geo3d">🎨 上色/三视图</button>
+        <button id="vt-geo3d" data-kind="geo3d">🧊 立体(3D)/上色/三视图</button>
       </span>
       <button class="ghostc" id="btn-rebuild-construct" style="display:none" title="清空画布并按模型构造命令还原（拖动动态点后可一键还原）">↻ 还原构造</button>
       <span class="sub">工具调用（ggb_eval / ggb_query）作用于本画布（按当前工具自动切视图）</span>
@@ -1271,13 +1270,11 @@ function runGGBTool(name, argsStr) {
   var mode3d = (args && args.view) === '3d';
   if (name === 'geo3d' || mode3d) { try { window.__used3D = 1; } catch (e) {} }
   if (mode3d) {
-    showView('ggb3d');
-    if (!ggbApi3d) {
-      initGgb3d(function () {});   // 异步加载；下一轮重试即可
-      return { ok:false, result:'GeoGebra 3D 画布正在初始化（web3d 引擎加载中），请下一轮重试（ggb_eval/ggb_query view:"3d"）' };
-    }
-  } else { try { showView('ggb'); } catch (e) {} }
-  var api = mode3d ? ggbApi3d : ggbApi;
+    try { showView('ggb'); } catch (e) {}
+    return { ok:false, result:'⚠️ GeoGebra 3D 已暂停使用（web3d 构建难上色/隐藏轴/构图不成体）。立体几何请改用 geo3d：action="solid"（kind=cube/prism/pyramid/tetrahedron/cylinder/cone/sphere，或 kind="poly" 配 verts+faces）+ action="shot" 出图；本画布为平面 2D（view 默认 2d）。' };
+  }
+  try { showView('ggb'); } catch (e) {}
+  var api = ggbApi;
   if (!api) return { ok:false, result:'GeoGebra 尚未就绪，请稍候再试' };
   try {
     if (name === 'ggb_eval') {
@@ -1395,8 +1392,8 @@ var SYSTEM_PROMPT = [
   '- ggb_eval：执行一条构造命令（{"command":"..."}），在画布上**真的把图构造出来**。注意：关键动点必须用【无参数】Point(路径)（如 P=Point(Segment(A,B))，把动点放在线段/路径上）——Point(路径,参数) 是固定点拖不动、SetValue(P,数值) 会把路径点改写成复数致构造断裂，两者都禁用。',
   '- ggb_query：查询画布数值/存在性，用于几何推理验证（{"names":"A,B,dAB","mode":"value|defined"}）。value 返回对象数值（距离/坐标/表达式值），defined 返回是否已定义。构造一批后必须用它核对。',
   '- geo3d：3D 立体几何工具（three.js，本地渲染）。用于**着色多面体/相对面/三视图/相邻面/镜像(手性)矛盾**类题目（如"正方体六个面涂不同颜色，按三视图判断相对面"）。action="reach" 传 top/right/front 三颜色，返回能否由同一正方体旋转得到（含行列式，镜像时给出更正视角）——判断题图画没画错的关键。action="query" 查相对面/相邻/面名；action="view" 转视角；action="solid" 可构建**常见可上色立体**（kind=cube/prism/pyramid/tetrahedron/cylinder/cone/sphere，逐面上色 + 面名标签）；action="shot" 把当前立体渲染成 **PNG 图片发进会话**（图片传输通道，学生/导师直接看得到图——画立体几何/三视图用它出图）。**判相对面**：三视图中从未同时出现的两色必相对；**判镜像**：(顶,右,前) 环绕次序若为左手系（reach 不可达）则同一正方体转不出来。',
-  '- ggb_eval/ggb_query（view:"3d"）：用于精确构造/测量。⚠️**画图卫生（重点，否则图就"防自学"）**：①立体用**有限的面**（Polygon 底面/侧面）+ **完整连边**构建，**边必须全部连上**（可见边实线 SetLineStyle(边,0)，隐藏边虚线 SetLineStyle(边,2)），**绝不留缺口/散点**；②**禁止把无限延长的 Plane(A,B,C) 当作图的主题**（那个会糊成整屏无限大平面）——若需它测距离/二面角/垂直，建完后 `SetColor(面,0.6,0.6,0.6)` 浅色 + `SetLineStyle(面,2)` 虚线 + `ShowLabel(面,false)` 隐藏，或 `SetVisibleInView(面,1,false)` 只在测量轮用，图上**只留立体本身+顶点标签**；③顶点用题目字母标（A/B/C/D/P…）。这样出来的图才连成一体、像教科书。（学生最终看的立体图优先用 geo3d 画，见下；GGB3D 主要留下精确测量。）',
-  '- geo3d（画图首选）：给学生看的那张立体图、以及上色/相对面/三视图/镜像，一律用 geo3d——它是干净渲染器：**无坐标轴、面自动着色+面名标签、视角由引擎调好**，出来就是教科书那种立体。用 action="solid" 设 kind=cube/prism/pyramid/tetrahedron/cylinder/cone/sphere，或 kind="poly" 配 verts+faces 建任意多面体（把题中各顶点坐标填进去即可），再用 action="shot" 把图画发进会话。**分工**：★画图/上色/相对面/三视图/镜像 → geo3d；精确构造/测量/数值 → GeoGebra view:"3d"；平面 → view:"2d"。',
+  '- ggb_eval/ggb_query：**平面(2D)** GeoGebra 画布（view 默认 2d；**GeoGebra 3D 已禁用**，传 view:"3d" 会被重定向回 geo3d）。用于平面几何/解析几何的点线面构造与数值验证。**所有立体几何一律用 geo3d**（见下），不要用 ggb 建三维。',
+  '- geo3d：**学生的立体几何图，以及上色/相对面/三视图/镜像，唯一的 3D 工具**（GeoGebra 3D 已禁用）。它是干净渲染器：**无坐标轴、面自动着色+面名标签、视角自动居中**，出来就是教科书那种"连成一体的实体"。**建体要成体**：用 action="solid" 设 kind=cube/prism/pyramid/tetrahedron/cylinder/cone/sphere（现成实体），或 kind="poly" 配 verts+faces 建任意多面体（支持 GeoGebra 式具名点：`verts:[{n:"A",p:[x,y,z]}...]` + `faces:[["A","B","C"]...]`，像 GeoGebra 那样定义点再连面成体；面会填色、边全接）。画完 action="shot" 把图发进会话（学生/导师直接收到这张干净立体图）。平面几何用 ggb(2d)。',
   '- student_calc：学生草稿纸（精确手算引擎）：化简/展开/代入（{"expr":"(x+1)(x+2)"}）→ 返回精确式（√5 保留 √5、√18→3√2、分母有理化、sin75°→(√6+√2)/4）。**凡是需要"算"的代数步骤都必须交给它**（展开、代入化简、根式化简、特殊角三角、合并同类项），不要脑内口算；它报"学生手算不可达"时改用定理/特殊角。',
   '- student_solve：学生草稿纸（方程求解）：（{"eqs":["x^2-3x+2=0"],"vars":["x"]}）→ 精确解（求根公式，带根号/分数的精确解）。解方程/方程组必须用它，禁止脑内暴力解。',
   '- scratch_paper：查看草稿档案（每次 student_calc/student_solve 自动存档为一步：输入→结果）。推导前先回看，避免重复/脑内重推。',
