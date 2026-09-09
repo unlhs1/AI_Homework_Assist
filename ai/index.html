@@ -1394,7 +1394,8 @@ var SYSTEM_PROMPT = [
   '- ggb_eval：执行一条构造命令（{"command":"..."}），在画布上**真的把图构造出来**。注意：关键动点必须用【无参数】Point(路径)（如 P=Point(Segment(A,B))，把动点放在线段/路径上）——Point(路径,参数) 是固定点拖不动、SetValue(P,数值) 会把路径点改写成复数致构造断裂，两者都禁用。',
   '- ggb_query：查询画布数值/存在性，用于几何推理验证（{"names":"A,B,dAB","mode":"value|defined"}）。value 返回对象数值（距离/坐标/表达式值），defined 返回是否已定义。构造一批后必须用它核对。',
   '- geo3d：3D 立体几何工具（three.js，本地渲染）。用于**着色多面体/相对面/三视图/相邻面/镜像(手性)矛盾**类题目（如"正方体六个面涂不同颜色，按三视图判断相对面"）。action="reach" 传 top/right/front 三颜色，返回能否由同一正方体旋转得到（含行列式，镜像时给出更正视角）——判断题图画没画错的关键。action="query" 查相对面/相邻/面名；action="view" 转视角；action="solid" 可构建**常见可上色立体**（kind=cube/prism/pyramid/tetrahedron/cylinder/cone/sphere，逐面上色 + 面名标签）；action="shot" 把当前立体渲染成 **PNG 图片发进会话**（图片传输通道，学生/导师直接看得到图——画立体几何/三视图用它出图）。**判相对面**：三视图中从未同时出现的两色必相对；**判镜像**：(顶,右,前) 环绕次序若为左手系（reach 不可达）则同一正方体转不出来。',
-  '- ggb_eval/ggb_query（view:"3d"，GeoGebra 3D 画布）：用于**通用立体几何**（多立方体拼搭求三视图/截面/体积/表面积/任意多面体/3D 点线面），传 view:"3d" 即切到 3D 画布构造（如 Cube(A,B,C)、Polyhedron、3D 点 A=(1,2,3)、平面、向量）。**GeoGebra 3D 也能上色**：把立体每面建成独立 Polygon（如 f1=Polygon(A,B,C)），再 SetColor(面, r,g,b) 与 SetFilling(面, 0~1) 设色/透明度，这样构造出的立体各面就带颜色。画完要发图：用 geo3d action="shot"（自动截当前活动的 3D 视图，含已上色的 GGB 3D 面）存成图片发进会话。平面几何用 view:"2d"（默认）。**分工**：上色/相对面/三视图/镜像/带色立体图 → geo3d；通用精确构造 → ggb view:"3d"；平面 → ggb view:"2d"。',
+  '- ggb_eval/ggb_query（view:"3d"，GeoGebra 3D 画布）：用于**精确构造/测量**（多立方体拼搭求三视图/截面/体积/表面积/任意多面体/3D 点线面/数值验证），传 view:"3d" 即切到 3D 画布构造（如 Cube(A,B,C)、Polyhedron、3D 点 A=(1,2,3)、平面、向量）。也可对面设色：把每面建成独立 Polygon 再 SetColor(面, r,g,b)、SetFilling(面, 0~1)。平面几何用 view:"2d"（默认）。',
+  '- geo3d（画图首选）：给学生看的那张立体图、以及上色/相对面/三视图/镜像，一律用 geo3d——它是干净渲染器：**无坐标轴、面自动着色+面名标签、视角由引擎调好**，出来就是教科书那种立体。用 action="solid" 设 kind=cube/prism/pyramid/tetrahedron/cylinder/cone/sphere，或 kind="poly" 配 verts+faces 建任意多面体（把题中各顶点坐标填进去即可），再用 action="shot" 把图画发进会话。**分工**：★画图/上色/相对面/三视图/镜像 → geo3d；精确构造/测量/数值 → GeoGebra view:"3d"；平面 → view:"2d"。',
   '- student_calc：学生草稿纸（精确手算引擎）：化简/展开/代入（{"expr":"(x+1)(x+2)"}）→ 返回精确式（√5 保留 √5、√18→3√2、分母有理化、sin75°→(√6+√2)/4）。**凡是需要"算"的代数步骤都必须交给它**（展开、代入化简、根式化简、特殊角三角、合并同类项），不要脑内口算；它报"学生手算不可达"时改用定理/特殊角。',
   '- student_solve：学生草稿纸（方程求解）：（{"eqs":["x^2-3x+2=0"],"vars":["x"]}）→ 精确解（求根公式，带根号/分数的精确解）。解方程/方程组必须用它，禁止脑内暴力解。',
   '- scratch_paper：查看草稿档案（每次 student_calc/student_solve 自动存档为一步：输入→结果）。推导前先回看，避免重复/脑内重推。',
@@ -2984,12 +2985,14 @@ function initGgb3d(cb) {
     showToolBar: false, showMenuBar: false, showAlgebraInput: false,
     showResetIcon: true, enableLabelDrags: false, enableShiftDragZoom: true,
     enableRightClick: false, showZoomButtons: false, language: 'zh',
+    showAxes: false, showGrid: false,  // 尽力隐藏 3D 轴/网格（部分 web3d 构建需另用 SetAxesVisible）
     appletOnLoad: function (api) {
       ggbApi3d = api;
       try { if (typeof api.setErrorDialogsActive === 'function') api.setErrorDialogsActive(false); } catch (e) {}
       try { api.setPerspective(String(api.getPerspectiveXML() || '').replace(/divider="0\.4"/, 'divider="0"')); } catch (e) {}
+      ['SetAxesVisible(false)', 'SetGridVisible(false)', 'SetAxisLabels(false)'].forEach(function (c) { try { api.evalCommand(c); } catch (e) {} });
       if (cb) cb(true);
-      addSys('🧊 GeoGebra 3D 画布就绪（ggb_eval mode:"3d" 将在此构造立体）');
+      addSys('🧊 GeoGebra 3D 画布就绪（用于精确构造/测量；画图见 geo3d）');
     }
   };
   try { new GGBApplet(parameters, true).inject('ggb3d-element'); }
