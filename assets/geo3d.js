@@ -222,6 +222,21 @@
         lp.position.set(n[0] * (HALF + 0.03), n[1] * (HALF + 0.03), n[2] * (HALF + 0.03));
         lp.lookAt(new THREE.Vector3(n[0] * (HALF + 1.2), n[1] * (HALF + 1.2), n[2] * (HALF + 1.2))); viewer.group.add(lp);
       });
+    } else if (kind === 'poly' && solidState.verts && solidState.faces) {
+      // 任意多面体：verts=[[x,y,z]..], faces=[[vi,vi,vi]..]（每面一个 color，可 shot 成图）
+      var V = solidState.verts;
+      solidState.faces.forEach(function (f, fi) {
+        var verts = f.map(function (vi) { return V[vi]; });
+        var col = (solidState.palette && solidState.palette[fi]) || PALETTE[fi % PALETTE.length];
+        var pos = []; triList(verts).forEach(function (t) { pos.push(t[0][0], t[0][1], t[0][2], t[1][0], t[1][1], t[1][2], t[2][0], t[2][1], t[2][2]); });
+        var geom = new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geom.computeVertexNormals();
+        viewer.group.add(new THREE.Mesh(geom, new THREE.MeshPhongMaterial({ color: col, transparent: true, opacity: 0.94, side: THREE.DoubleSide })));
+        viewer.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geom), new THREE.LineBasicMaterial({ color: 0x1c2b36 })));
+        var ctr = faceCentroid(verts), nrm = faceNormal(verts);
+        var lp = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.5), makeLabelMat('面' + (fi + 1)));
+        lp.position.set(ctr[0] + nrm[0] * 0.06, ctr[1] + nrm[1] * 0.06, ctr[2] + nrm[2] * 0.06);
+        lp.lookAt(new THREE.Vector3(ctr[0] + nrm[0], ctr[1] + nrm[1], ctr[2] + nrm[2])); viewer.group.add(lp);
+      });
     } else if (kind === 'cylinder' || kind === 'cone' || kind === 'sphere') {
       var mg = kind === 'sphere' ? new THREE.SphereGeometry(1.15, 28, 20) : (kind === 'cone' ? new THREE.ConeGeometry(1, 2.4, 32, 1, false) : new THREE.CylinderGeometry(1, 1, 2.4, 32, 1, false));
       if (kind === 'sphere') {
@@ -293,7 +308,10 @@
       var kind = args.kind || solidState.kind || 'cube';
       solidState.kind = kind;
       if (args.palette) solidState.palette = args.palette;
-      if (kind === 'cube') {
+      if (kind === 'poly' && args.verts && args.faces) {
+        solidState.verts = args.verts; solidState.faces = args.faces;
+        solidState.colors = null; solidState.labelToKey = null;
+      } else if (kind === 'cube') {
         // 设定立方体六面着色：接收 top/right/front/bottom/left/back 颜色名；未指定面用「尚未占用」的基准色补齐（保证六色互异）
         var setK = { top: '+Y', bottom: '-Y', right: '+X', left: '-X', front: '+Z', back: '-Z' };
         var explicit = {}, used = {};
@@ -318,8 +336,8 @@
         solidState.colors = null; solidState.labelToKey = null;
       }
       if (viewer) buildSolidView();
-      var KIND = { cube: '正方体', prism: '三棱柱', pyramid: '四棱锥', tetrahedron: '四面体', cylinder: '圆柱', cone: '圆锥', sphere: '球' };
-      var nfaces = SOLID_FACES(kind) ? SOLID_FACES(kind).length : 0;
+      var KIND = { cube: '正方体', prism: '三棱柱', pyramid: '四棱锥', tetrahedron: '四面体', cylinder: '圆柱', cone: '圆锥', sphere: '球', poly: '自定义多面体' };
+      var nfaces = kind === 'poly' && solidState.faces ? solidState.faces.length : (SOLID_FACES(kind) ? SOLID_FACES(kind).length : 0);
       out = '已构建可上色' + (KIND[kind] || kind) + (kind === 'cube' ? '（六面着色：顶=' + solidState.colors['+Y'] + '，右=' + solidState.colors['+X'] + '，前=' + solidState.colors['+Z'] + '）' : '（共' + nfaces + '面 / 曲面可上色，可用 action="shot" 生成图片发进会话）');
     } else if (action === 'shot') {
       out = shot();
