@@ -128,7 +128,10 @@
   // 自由轨道相机：按 theta/phi/dist/target 把相机放到球面位置并看向目标（模块级，frameSolid/orientTo 共用）
   function applyOrbit() {
     if (!viewer || !viewer.orbit) return;
-    var o = viewer.orbit, sp = Math.sin(o.phi);
+    var o = viewer.orbit;
+    if (Math.abs(o.phi) > Math.PI * 2) o.phi = o.phi % (Math.PI * 2); // prevent float drift
+    if (Math.abs(Math.sin(o.phi)) < 0.001) o.phi += 0.002; // unlimited pitch: nudge off degenerate pole to avoid lookAt NaN
+    var sp = Math.sin(o.phi);
     viewer.camera.position.set(o.target.x + o.dist * sp * Math.sin(o.theta), o.target.y + o.dist * Math.cos(o.phi), o.target.z + o.dist * sp * Math.cos(o.theta));
     viewer.camera.lookAt(o.target.x, o.target.y, o.target.z);
   }
@@ -171,7 +174,7 @@
       if (!dragging) return;
       var dx = (e.clientX - lx) * 0.006, dy = (e.clientY - ly) * 0.006; lx = e.clientX; ly = e.clientY;
       viewer.orbit.theta += dx;
-      viewer.orbit.phi = Math.max(0.08, Math.min(Math.PI - 0.08, viewer.orbit.phi - dy));
+      viewer.orbit.phi -= dy; // 上下无限制：自由越过顶/底极点（退化保护在 applyOrbit 内）
       applyOrbit(); renderViewer();
     });
     cvEl.addEventListener('pointerup', function () { dragging = false; panning = false; });

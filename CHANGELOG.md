@@ -93,3 +93,8 @@ GeoGebra web3d-0.js 在 demo 异步初始化中被快节奏点击+Escape 打断�
 - **默认思考档位 high→low**：maxTokens 32000→4000、reasoning_effort medium→low、提示词≤200 字短思考。设置抽屉默认选中 low，getThinkLevel 兜底同步 low（原兜底 high 是 loop 慢的元凶）
 - SYSTEM_PROMPT【节奏控制】升级为【思考块限额（强制）】：思考块≤6 行、只写"当前局面→下一步动作"；长篇推演/罗列多方案/重复读题明令禁止——推导交给工具（草稿纸/画布），思考只做决策
 - ui_smoke T6 修健壮：动态选一个与当前值不同的 option（selected 移到 index1 后固定 index:1 切换会误判 no change）；8/8 绿
+
+### orbit 上下无限制（主人反馈"上下旋转限制角度"，晚）
+
+- 去掉 phi 极点钳制 [0.08, π-0.08]：上下拖动自由越过顶/底极点；applyOrbit 内做退化保护（sin(phi)≈0 时微偏移防 lookAt NaN + 2π 归一防浮点漂移）；geo3d.js?v=20260909c 破缓存
+- 三绿 16+8+12；人审图1（塔立正）/图4（cube 六色）无回归
