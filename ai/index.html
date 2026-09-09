@@ -2730,14 +2730,20 @@ var toolRound = 0;
         continue;
       }
       // ── geo3d 收尾门禁：立体题建了模但学生图从未发出 → 拦截最终回答一次，强制先 shot ──
-      if ((is3D || window.__used3D) && !window.__geo3dFigure && finalShotNudges < 1 && res.content) {
-        finalShotNudges++;
+      if ((is3D || window.__used3D) && !window.__geo3dFigure && res.content) {
+        if (finalShotNudges < 1) {
+        finalShotNudges++; try { window.__geo3dPeekGate = false; } catch (eFSgate) {} // 收尾保图优先：放开 peek 硬门禁，shot 直通
         conversation.push({ role:'assistant', content: res.content });
         conversation.push({ role:'user', content:[{ type:'text', text:'⚠️ 收尾检查：你已用 geo3d 构建立体模型，但**成品图从未发进会话**（peek 自查图学生看不到）。请立即调用 geo3d action="shot" 把当前立体图发给学生；若自查发现构型/顶点字母/辅助线有问题，先修正再 shot。发图后再输出最终讲解正文。' }] });
         addSys('🚧 geo3d 收尾门禁：立体已建模但学生图未发出 → 拦截收尾，要求先 shot');
         toolRound++;
         roundIndexMap = {};
         continue;
+      }
+        else {
+          // 模型两次无视收尾指令 → 页面代理直接执行 shot（学生必须看到立体图；postFigure 走 DOM 不依赖模型）
+          try { window.__geo3dPeekGate = false; var shotOut = runGGBTool('geo3d', '{"action":"shot"}'); addSys('🚧 geo3d 收尾门禁：模型两次未发图 → 页面代理执行 shot' + ((shotOut && shotOut.ok) ? '（图已发出）' : '（失败：' + ((shotOut && shotOut.result) || '?') + '）')); } catch (eProxyShot) {}
+        }
       }
       finalRes = res;
       break;
