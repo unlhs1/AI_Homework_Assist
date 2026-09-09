@@ -2180,6 +2180,7 @@ function streamChat(messages, onDelta, opts) {
           if ((r.status === 400 || r.status === 415 || r.status === 422) && !imageRetried && hasPeekImageMsgs(body.messages)) {
             imageRetried = true;
             peekVisionOK = false;
+            try { window.__geo3dPeekGate = false; } catch (eGate2) {} // 视觉降级同步放开 shot 门禁，防拦死
             try { peekVisionStore(false, cfg.model); } catch (eImg) {}
             var b7 = JSON.parse(JSON.stringify(body));
             b7.messages = stripPeekImages(b7.messages);
@@ -2357,6 +2358,7 @@ async function runReAct(text) {
   if (!cfg.baseurl || !cfg.model) { addErr('未配置 API：点右上角 ⚙ 设置（或点「载入内置演示」无 Key 体验）'); running = false; setBusy(false); return; }
   if (!cfg.apikey) { addErr('未填 API Key（右上角 ⚙ 设置）'); running = false; setBusy(false); return; }
   peekVisionOK = peekVisionLoad(cfg.model); // 按模型恢复：曾拒图的模型不再注入自查图
+  try { window.__geo3dPeekGate = !!peekVisionOK; } catch (eGate) {} // peek 硬门禁：会话支持看图时强制先 peek 自查再 shot
 
   addUser(text);
   // ── 学段定性 Agent：先判级（轻量非流式，失败降级综合不阻塞）──

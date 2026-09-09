@@ -8,6 +8,7 @@ const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const URL = 'http://127.0.0.1:8123/ai/index.html';
 const KEY = process.env.DASHSCOPE_KEY || '';
 const MODEL = process.env.E2E_MODEL || 'MiniMax-M2.5';
+const MAXMIN = parseInt(process.env.E2E_MAXMIN || '9', 10); // 轮询上限（分钟）：慢推理模型调大，如 E2E_MAXMIN=18
 const OUT = path.join(__dirname, 'out');
 const Q17 = '如图，四棱锥 P-ABCD 中，PA⊥底面 ABCD，PA=AC=2，BC=1，AB=√3。(1) 证明：AD⊥PB 时 AD∥平面PBC；(2) 若 AD⊥DC，且二面角 A-CP-D 的正弦值为 √42/7，求 AD。';
 
@@ -29,7 +30,7 @@ const Q17 = '如图，四棱锥 P-ABCD 中，PA⊥底面 ABCD，PA=AC=2，BC=1�
   console.log('Q17 sent → ' + MODEL + ', waiting ReAct loop...');
   const t0 = Date.now();
   let finished = false;
-  while (Date.now() - t0 < 9 * 60 * 1000) {
+  while (Date.now() - t0 < MAXMIN * 60 * 1000) {
     await page.waitForTimeout(5000);
     const st = await page.evaluate(() => ({
       running: document.getElementById('btn-stop').style.display !== 'none',

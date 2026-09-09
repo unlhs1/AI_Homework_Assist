@@ -385,10 +385,14 @@
     } catch (e) { url = null; }
     if (!url) { try { url = src.toDataURL('image/png'); } catch (e2) { url = null; } }
     if (!url) return '自查图导出失败（画布被拒）——请直接用坐标数据核对，或改用 action="shot"';
-    try { window.__geo3dPeekImage = url; } catch (e3) {}
+    try { window.__geo3dPeekImage = url; window.__geo3dPeekDone = true; } catch (e3) {}
     return '🖼 已渲染当前立体图（自查通道）：图将随下一条消息回传给你，不会发进会话。请对照图检查构型/顶点字母/辅助线/构图角度，需要修正就 add/solid 改完再次 peek 复查，确认满意后 action="shot" 发给学生。';
   }
   function shot() {
+    // peek 硬门禁：页面在会话支持看图时设置 __geo3dPeekGate，未 peek 过的 shot 直接拦截（逼模型先自查）
+    var gateOn = false, peeked = false;
+    try { gateOn = !!window.__geo3dPeekGate; peeked = !!window.__geo3dPeekDone; } catch (eGate) {}
+    if (gateOn && !peeked) return '⛔ 自查门禁未通过：先调用 geo3d action="peek" 渲染当前画面（自查图回传给你、不发会话），对照修正构型/顶点字母/辅助线/构图，满意后再 action="shot" 发给学生。';
     // 截当前活动的 3D 视图：GeoGebra 3D canvas（上色后）优先，否则 three.js renderer
     var url = null;
     var g3dEl = (typeof document !== 'undefined') && document.getElementById('ggb3d-element');

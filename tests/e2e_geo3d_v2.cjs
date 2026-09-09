@@ -74,7 +74,17 @@ if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
   T('T7a peek returns image', r8 && r8.ok === true && !!peekImg && /^data:image\/(jpeg|png)/.test(peekImg), r8 && r8.result);
   const imgsAfter7 = await page.evaluate(() => document.querySelectorAll('#chat-scroll img.m-img').length);
   T('T7b peek not posted to chat', imgsAfter7 === imgsBefore7, 'imgs ' + imgsBefore7 + '→' + imgsAfter7);
-  await page.evaluate(() => { window.__geo3dPeekImage = null; }); // 清理，避免影响后续用例
+
+  // T7c/d peek 硬门禁：gate 开启时未 peek 的 shot 被拦（不出图），peek 后放行
+  await page.evaluate(() => { window.__geo3dPeekGate = true; window.__geo3dPeekDone = false; window.__geo3dPeekImage = null; });
+  const rGate = await call({ action: 'shot' });
+  const gateImgs0 = await page.evaluate(() => document.querySelectorAll('#chat-scroll img.m-img').length);
+  T('T7c gate blocks shot before peek', rGate && /peek/.test(String(rGate.result || '')), rGate && rGate.result);
+  await call({ action: 'peek' });
+  const rGate2 = await call({ action: 'shot' });
+  const gateImgs1 = await page.evaluate(() => document.querySelectorAll('#chat-scroll img.m-img').length);
+  T('T7d shot passes after peek', rGate2 && rGate2.ok === true && gateImgs1 === gateImgs0 + 1, 'imgs ' + gateImgs0 + '→' + gateImgs1);
+  await page.evaluate(() => { window.__geo3dPeekGate = false; window.__geo3dPeekImage = null; }); // 清理，避免影响后续用例
 
   // T5 清理
   const r7 = await call({ action: 'clear' });
