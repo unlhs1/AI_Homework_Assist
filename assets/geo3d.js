@@ -159,7 +159,15 @@
     function applyCam() { camera.position.copy(new THREE.Vector3(3.2, 3.8, 4.3).normalize().multiplyScalar(viewer.camDist)); camera.lookAt(0, 0, 0); }
     return viewer;
   }
-  function renderViewer() { if (viewer) { viewer.renderer.render(viewer.scene, viewer.camera); } }
+  function renderViewer() {
+    if (!viewer) return;
+    // 标签 billboard：字母/面名/文字标注永远朝向镜头（每帧抵消 group 旋转）；带 CanvasTexture 的面片即标签
+    var inv = viewer.group.quaternion.clone().invert();
+    viewer.group.traverse(function (o) {
+      if (o.isMesh && o.material && o.material.map) o.quaternion.copy(inv).multiply(viewer.camera.quaternion);
+    });
+    viewer.renderer.render(viewer.scene, viewer.camera);
+  }
 
   function makeLabelMat(text, onLight) {
     var cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
@@ -229,35 +237,42 @@
   function buildSolidView() {
     if (!viewer) return;
     while (viewer.group.children.length) viewer.group.remove(viewer.group.children[0]);
+    viewer.group.position.set(0, 0, 0); viewer.group.quaternion.set(0, 0, 0, 1); // 先归零再量包围盒：局部中心不受上次姿态影响，保证收敛
     var kind = solidState.kind || 'cube';
     if (kind === 'cube') {
       var colors = solidState.colors || REF_COLORS, HALF = 1.0;
-      var mats = FACE_KEYS.map(function (k) {
-        return new THREE.MeshBasicMaterial({ color: hexOf(colors[k] || '#999'), transparent: true, opacity: 0.96, side: THREE.DoubleSide });
-      });
-      var box = new THREE.Mesh(new THREE.BoxGeometry(2 * HALF, 2 * HALF, 2 * HALF), mats);
-      viewer.group.add(box);
-      viewer.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2 * HALF, 2 * HALF, 2 * HALF)), new THREE.LineBasicMaterial({ color: 0x1c2b36 })));
+      // 每面独立 Plane mesh：半透明按面中心距离排序绘制（远→近）；单 mesh 多材质按 group 固定顺序画（-Z 收尾）会“后壁盖前壁”→ 贴脸错觉
       FACE_KEYS.forEach(function (k) {
-        var n = norm(k); var lp = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.75), makeLabelMat(colors[k] || ''));
+        var n = norm(k);
+        var fm = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF, 2 * HALF), new THREE.MeshBasicMaterial({ color: hexOf(colors[k] || '#999'), transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+        fm.position.set(n[0] * HALF, n[1] * HALF, n[2] * HALF);
+        fm.lookAt(new THREE.Vector3(n[0] * (HALF + 1), n[1] * (HALF + 1), n[2] * (HALF + 1)));
+        viewer.group.add(fm);
+        var lp = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.75), makeLabelMat(colors[k] || ''));
         lp.position.set(n[0] * (HALF + 0.03), n[1] * (HALF + 0.03), n[2] * (HALF + 0.03));
         lp.lookAt(new THREE.Vector3(n[0] * (HALF + 1.2), n[1] * (HALF + 1.2), n[2] * (HALF + 1.2))); viewer.group.add(lp);
       });
+      viewer.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2 * HALF, 2 * HALF, 2 * HALF)), new THREE.LineBasicMaterial({ color: 0x1c2b36 })));
     } else if (kind === 'poly' && solidState.verts && solidState.faces) {
       // 任意多面体：verts=[[x,y,z]..]；faces=[{idx:[vi..], name, color}..]（run() 已归一化），可 shot 成图
       var V = solidState.verts;
+      var BC = [0, 0, 0]; V.forEach(function (p) { BC[0] += p[0]; BC[1] += p[1]; BC[2] += p[2]; }); BC = [BC[0] / V.length, BC[1] / V.length, BC[2] / V.length];
       solidState.faces.forEach(function (f, fi) {
         var verts = f.idx.map(function (vi) { return V[vi]; });
         var col = f.color || (solidState.palette && solidState.palette[fi]) || FACE_EDU;
+        var tinted = !!f.color || !!(solidState.palette && solidState.palette[fi]); // 上色纪律：默认素色淡面（线框感），仅显式上色才浓
         if (typeof col === 'string' && col.charAt(0) !== '#') col = hexOf(col);
         var pos = []; triList(verts).forEach(function (t) { pos.push(t[0][0], t[0][1], t[0][2], t[1][0], t[1][1], t[1][2], t[2][0], t[2][1], t[2][2]); });
         var geom = new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geom.computeVertexNormals();
-        viewer.group.add(new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.94, side: THREE.DoubleSide })));
+        viewer.group.add(new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: tinted ? 0.5 : 0.22, side: THREE.DoubleSide, depthWrite: false })));
         viewer.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geom), new THREE.LineBasicMaterial({ color: 0x1c2b36 })));
         if (!f.name) return; // 教材风：无面名的面不打标签（避免背面透出镜像水印），顶点字母标签保留
         var ctr = faceCentroid(verts), nrm = faceNormal(verts);
-        var lp = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.5), makeLabelMat(f.name, faceLabelOnLight(col)));
-        lp.position.set(ctr[0] + nrm[0] * 0.06, ctr[1] + nrm[1] * 0.06, ctr[2] + nrm[2] * 0.06);
+        // 面名标签：法向悬浮 0.22 + 沿「体质心→面中心」方向外发散 0.42 → 相邻侧面标签各归本方位，中部不扎堆
+        var outv = new THREE.Vector3(ctr[0] - BC[0], ctr[1] - BC[1], ctr[2] - BC[2]);
+        if (outv.lengthSq() < 1e-6) outv.set(nrm[0], nrm[1], nrm[2]); outv.normalize();
+        var lp = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.33), makeLabelMat(f.name, faceLabelOnLight(col)));
+        lp.position.set(ctr[0] + nrm[0] * 0.22 + outv.x * 0.42, ctr[1] + nrm[1] * 0.22 + outv.y * 0.42, ctr[2] + nrm[2] * 0.22 + outv.z * 0.42);
         lp.lookAt(new THREE.Vector3(ctr[0] + nrm[0], ctr[1] + nrm[1], ctr[2] + nrm[2])); viewer.group.add(lp);
       });
       // 顶点字母标签（具名点模式）：贴在每个顶点沿「质心→顶点」方向外偏处，图与题干字母一一对应
@@ -276,10 +291,10 @@
     } else if (kind === 'cylinder' || kind === 'cone' || kind === 'sphere') {
       var mg = kind === 'sphere' ? new THREE.SphereGeometry(1.15, 28, 20) : (kind === 'cone' ? new THREE.ConeGeometry(1, 2.4, 32, 1, false) : new THREE.CylinderGeometry(1, 1, 2.4, 32, 1, false));
       if (kind === 'sphere') {
-        viewer.group.add(new THREE.Mesh(mg, new THREE.MeshBasicMaterial({ color: PALETTE_EDU[0], transparent: true, opacity: 0.88, side: THREE.DoubleSide })));
+        viewer.group.add(new THREE.Mesh(mg, new THREE.MeshBasicMaterial({ color: PALETTE_EDU[0], transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false })));
         viewer.group.add(new THREE.Mesh(new THREE.SphereGeometry(1.15, 16, 12), new THREE.MeshBasicMaterial({ wireframe: true, color: 0x1c2b36 })));
       } else {
-        var mats2 = (mg.groups && mg.groups.length) ? mg.groups.map(function (g, gi) { return new THREE.MeshBasicMaterial({ color: FACE_EDU, transparent: true, opacity: 0.94, side: THREE.DoubleSide }); }) : [new THREE.MeshBasicMaterial({ color: FACE_EDU, transparent: true, opacity: 0.94, side: THREE.DoubleSide })];
+        var mats2 = (mg.groups && mg.groups.length) ? mg.groups.map(function (g, gi) { return new THREE.MeshBasicMaterial({ color: FACE_EDU, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }); }) : [new THREE.MeshBasicMaterial({ color: FACE_EDU, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false })];
         viewer.group.add(new THREE.Mesh(mg, mats2));
         viewer.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(mg), new THREE.LineBasicMaterial({ color: 0x1c2b36 })));
       }
@@ -292,12 +307,12 @@
         var col = (solidState.palette && solidState.palette[fi]) || FACE_EDU;
         var pos = []; triList(f.verts).forEach(function (t) { pos.push(t[0][0], t[0][1], t[0][2], t[1][0], t[1][1], t[1][2], t[2][0], t[2][1], t[2][2]); });
         var geom = new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geom.computeVertexNormals();
-        var mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.94, side: THREE.DoubleSide }));
+        var mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: (solidState.palette && solidState.palette[fi]) ? 0.5 : 0.22, side: THREE.DoubleSide, depthWrite: false }));
         mesh.userData.faceName = f.name; viewer.group.add(mesh);
         viewer.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geom), new THREE.LineBasicMaterial({ color: 0x1c2b36 })));
         var ctr = faceCentroid(f.verts), nrm = faceNormal(f.verts);
-        var lp = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.5), makeLabelMat(f.name, faceLabelOnLight(col)));
-        lp.position.set(ctr[0] + nrm[0] * 0.06, ctr[1] + nrm[1] * 0.06, ctr[2] + nrm[2] * 0.06);
+        var lp = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.4), makeLabelMat(f.name, faceLabelOnLight(col)));
+        lp.position.set(ctr[0] + nrm[0] * 0.22, ctr[1] + nrm[1] * 0.22, ctr[2] + nrm[2] * 0.22); // 沿法向悬浮：billboard 下各面标签拉开不重叠
         lp.lookAt(new THREE.Vector3(ctr[0] + nrm[0], ctr[1] + nrm[1], ctr[2] + nrm[2])); viewer.group.add(lp);
       });
     }
@@ -340,17 +355,33 @@
       }
     });
   }
-  // 自动取景：按立体包围盒中心+尺寸设置相机，画面完整居中不裁切
+  // 自动取景：把几何中心平移到原点（旋转/缩放锚点=体中心，不再固定在顶点 A），再按包围盒尺寸取景
   function frameSolid() {
     if (!viewer || !viewer.group) return;
-    var box;
-    try { box = new THREE.Box3().setFromObject(viewer.group); } catch (e) { return; }
+    viewer.group.updateWorldMatrix(true, true);
+    var box = new THREE.Box3(), has = false;
+    viewer.group.children.forEach(function (o) {
+      if (o.material && o.material.map) return; // billboard 标签面片不参与取景：其朝向旋转会污染包围盒 → 构图偏心（cube 彩面被裁而线框完整）
+      box.expandByObject(o); has = true;
+    });
+    if (!has) { try { box = new THREE.Box3().setFromObject(viewer.group); } catch (e) { return; } }
     var c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
-    var maxS = Math.max(s.x, s.y, s.z) || 2.2;
-    viewer.camDist = Math.max(3.4, maxS * 2.1);
+    viewer.group.position.set(-c.x, -c.y, -c.z); // 体中心移到世界原点：拖动旋转/滚轮缩放都以它为锚
+    // 取景距离按「相机基投影跨度」算：随机旋转后屏幕横向跨度可达对角线级，世界 AABB 单轴 maxS 会低估 → 横向贴边裁字
     var dir = new THREE.Vector3(3.2, 3.8, 4.3).normalize();
-    viewer.camera.position.copy(c.clone().add(dir.clone().multiplyScalar(viewer.camDist)));
-    viewer.camera.lookAt(c);
+    var up0 = Math.abs(dir.y) > 0.98 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+    var camR = new THREE.Vector3().crossVectors(dir, up0).normalize(); // 相机右向量（近似）
+    var camU = new THREE.Vector3().crossVectors(camR, dir).normalize(); // 相机上向量
+    var hw = 0.6, hh = 0.6;
+    var mnc = box.min.clone().sub(c), mxc = box.max.clone().sub(c);
+    for (var xi = 0; xi < 2; xi++) for (var yi = 0; yi < 2; yi++) for (var zi = 0; zi < 2; zi++) {
+      var pk = new THREE.Vector3(xi ? mxc.x : mnc.x, yi ? mxc.y : mnc.y, zi ? mxc.z : mnc.z);
+      hw = Math.max(hw, Math.abs(pk.dot(camR))); hh = Math.max(hh, Math.abs(pk.dot(camU)));
+    }
+    var t2 = Math.tan(42 * Math.PI / 360), asp = viewer.camera.aspect || 1;
+    viewer.camDist = Math.max(3.4, Math.max(hw / (t2 * asp), hh / t2) * 1.35); // 1.35 → 本体最长边占比 ≤74%，四周留白舒适
+    viewer.camera.position.copy(dir.clone().multiplyScalar(viewer.camDist));
+    viewer.camera.lookAt(0, 0, 0);
     renderViewer();
   }
   // 把当前 3D 画面渲染成 PNG，作为图片消息发进会话（图片传输通道）
