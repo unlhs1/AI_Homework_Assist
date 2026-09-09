@@ -97,6 +97,10 @@ button.stopb:hover { background:#fdf2f2; }
 .gg-head .sub { margin-left:auto; color:var(--sub); font-size:11px; font-weight:400; }
 .gg-body { flex:1; padding:12px; min-height:0; overflow:auto; }
 #ggb-element { width:100%; height:100%; min-height:480px; border:1px solid #e8ebf2; border-radius:8px; overflow:hidden; }
+#ggb3d-element, #geo3d-element { width:100%; height:100%; min-height:480px; border:1px solid #e8ebf2; border-radius:8px; overflow:hidden; }
+#geo3d-element canvas { display:block; }
+.view-tabs button { border:1px solid var(--border); background:#f7f9fb; color:var(--ink); padding:3px 10px; border-radius:7px; font-size:12px; cursor:pointer; }
+.view-tabs button.on { border-color:var(--accent); background:#e8f0fb; color:var(--accent); font-weight:600; }
 .gg-note { margin-top:9px; font-size:11.5px; color:var(--sub); line-height:1.6; display:none; }
 .gg-note b { color:var(--ink); }
 .footer-note { margin-top:6px; font-size:11px; color:var(--sub); }
@@ -156,12 +160,19 @@ button.stopb:hover { background:#fdf2f2; }
   <!-- 右：GeoGebra 工具工作台 -->
   <section class="panel">
     <div class="gg-head">
-      <span>📐 GeoGebra 工具工作台</span>
+      <span>🛠 工具工作台</span>
+      <span class="view-tabs" id="view-tabs" style="margin-left:auto;display:flex;gap:6px">
+        <button id="vt-ggb" class="on">📐 平面(2D)</button>
+        <button id="vt-ggb3d" data-kind="ggb3d">🧊 立体(3D)</button>
+        <button id="vt-geo3d" data-kind="geo3d">🎨 上色/三视图</button>
+      </span>
       <button class="ghostc" id="btn-rebuild-construct" style="display:none" title="清空画布并按模型构造命令还原（拖动动态点后可一键还原）">↻ 还原构造</button>
-      <span class="sub">工具调用（ggb_eval / ggb_query）直接作用于本画布</span>
+      <span class="sub">工具调用（ggb_eval / ggb_query）作用于本画布（按当前工具自动切视图）</span>
     </div>
     <div class="gg-body">
       <div id="ggb-element"></div>
+      <div id="ggb3d-element" style="display:none"></div>
+      <div id="geo3d-element" style="display:none"></div>
       <div class="gg-note" id="ggb-note"></div>
       <div class="footer-note">由 <a href="https://www.geogebra.org" target="_blank" rel="noopener">GeoGebra</a> 开源内核嵌入（webSimple，deployggb.js）。KaTeX 公式渲染为本地副本。</div>
     </div>
@@ -229,6 +240,8 @@ button.stopb:hover { background:#fdf2f2; }
 
 <script src="../lib/katex/katex.min.js"></script>
 <script src="../gg/lib/geogebra-webSimple/deployggb.js"></script>
+<script src="../assets/three.min.js"></script>
+<script src="../assets/geo3d.js"></script>
 <script>
 // ════════════════════════════════════════════════════════════
 // AI 聊天工作台 · ReAct 工具循环（DSH 式交互形态）
@@ -1209,6 +1222,9 @@ var TOOLS = [
   { type:'function', function:{ name:'scratch_rollback',
     description:'回滚学生草稿纸档案：像撕掉草稿纸后面几行一样，删除第 id 步之后（含）的所有演算记录，回到第 id 步的结果继续。算错了一步就回滚到之前对的步骤重算，**不要整段重来更不要脑内重推**。id=0 表示清空全部档案（换一张纸）。返回回滚后剩多少步。',
     parameters:{ type:'object', properties:{ id:{ type:'number', description:'保留到第几步（含），其后全部删除；0=清空' } }, required:['id'] } } }
+  ,{ type:'function', function:{ name:'geo3d',
+    description:'3D 立体几何工具（three.js 渲染，浏览器本地执行）：用于【着色多面体 / 相对面 / 三视图 / 相邻面 / 镜像(手性)矛盾】类题目，与 ggb_eval 的平面几何互补。action=solid 设定立方体六面颜色（top/right/front/bottom/left/back 传颜色名，缺省用基准：顶=白、右=绿、前=黑、底=蓝、左=黄、后=红）；action=view 或 orient 把立方体转到某视角（top/right/front 传颜色名，镜像会自动更正并提示）；action=reach 只判断 (top,right,front) 三色能否由同一正方体旋转得到（返回可达性+行列式+若镜像给出更正视角）；action=query 查当前相对面/相邻面/每面颜色；action=reset 恢复基准。**相对面判定**：三视图中从未同时出现的两色必相对；**镜像判定**：某 (顶,右,前) 环绕次序若为左手系（行列式<0）则同一正方体转不出来，是题图画错。',
+    parameters:{ type:'object', properties:{ action:{ type:'string', enum:['solid','view','orient','reach','query','reset'], description:'要执行的动作' }, top:{ type:'string', description:'顶面颜色名' }, right:{ type:'string', description:'右面颜色名' }, front:{ type:'string', description:'前面颜色名' }, bottom:{ type:'string', description:'底面颜色名' }, left:{ type:'string', description:'左面颜色名' }, back:{ type:'string', description:'后面颜色名' } }, required:['action'] } } }
 ];
 
 function runGGBTool(name, argsStr) {
@@ -1248,7 +1264,13 @@ function runGGBTool(name, argsStr) {
     return { ok:true, result: '📓 草稿已回滚，剩余 ' + left + ' 步（id=' + (args.id || 0) + '）——可基于该步继续，不用脑内重推' };
   }
   var api = ggbApi;
+  if (name === 'geo3d') {
+    var g3 = ensureGeo3d();
+    if (!g3) return { ok:false, result:'geo3d 引擎未加载' };
+    return g3.run(argsStr);
+  }
   if (!api) return { ok:false, result:'GeoGebra 尚未就绪，请稍候再试' };
+  try { showView('ggb'); } catch (e) {}
   try {
     if (name === 'ggb_eval') {
       var cmd = String(args.command || '').trim();
@@ -1294,6 +1316,38 @@ function runGGBTool(name, argsStr) {
   }
 }
 
+// ── 3b. 工具视图切换（用到哪个工具就显示哪个视图；非零和，多工具共存）────
+function showView(kind) {
+  var g = document.getElementById('ggb-element');
+  var g3d = document.getElementById('ggb3d-element');
+  var c3 = document.getElementById('geo3d-element');
+  var tG = document.getElementById('vt-ggb'), tG3 = document.getElementById('vt-ggb3d'), tC3 = document.getElementById('vt-geo3d');
+  function on(el, onoff) { if (el) el.style.display = onoff ? 'block' : 'none'; }
+  function tab(el, o) { if (el) el.classList.toggle('on', o); }
+  if (kind === 'geo3d') { on(c3, true); on(g, false); on(g3d, false); tab(tC3, true); tab(tG, false); tab(tG3, false); }
+  else if (kind === 'ggb3d') {
+    var g3dEl = document.getElementById('ggb3d-element');
+    if (g3dEl && !g3dEl.dataset.has) {
+      g3dEl.dataset.has = '1';
+      g3dEl.innerHTML = '<div style="padding:28px;color:var(--sub);font-size:13px;line-height:1.7">🧊 立体(3D) GeoGebra 视图：<br>通用立体几何（多立方体拼搭三视图 / 截面 / 体积 / 任意多面体）走 GeoGebra 3D。<br><b style="color:var(--ink)">当前已接入：</b>平面几何 = GeoGebra 2D；着色上色/相对面/三视图/镜像检测 = geo3d(three.js，见「上色/三视图」标签)。<br>GeoGebra 3D 引擎（web3d）为下一步接入点，接好后 ggb_eval/ggb_query 将在此视图直接建 Cube/Polyhedron 等 3D 对象。</div>';
+    }
+    on(g3d, true); on(g, false); on(c3, false); tab(tG3, true); tab(tG, false); tab(tC3, false);
+  }
+  else { on(g, true); on(g3d, false); on(c3, false); tab(tG, true); tab(tG3, false); tab(tC3, false); }
+}
+(function wireViewTabs() {
+  function bind(el, kind) { if (el) el.addEventListener('click', function () { showView(kind); }); }
+  bind(document.getElementById('vt-ggb'), 'ggb');
+  bind(document.getElementById('vt-ggb3d'), 'ggb3d');
+  bind(document.getElementById('vt-geo3d'), 'geo3d');
+})();
+// geo3d / ggb 调用时自动切到对应视图（先显示容器再初始化，避免 0 尺寸）
+function ensureGeo3d() {
+  showView('geo3d');
+  if (window.geo3d) { try { window.geo3d.initViewer(); } catch (e) {} }
+  return window.geo3d;
+}
+
 // ── 4. 系统提示词（含全部防护，勿回退）───────────────────────
 var SYSTEM_PROMPT = [
   '你是数学题教师。工作台里嵌入了 GeoGebra 交互画布（浏览器本地执行，无需额外权限）。',
@@ -1332,6 +1386,7 @@ var SYSTEM_PROMPT = [
   '可用工具：',
   '- ggb_eval：执行一条构造命令（{"command":"..."}），在画布上**真的把图构造出来**。注意：关键动点必须用【无参数】Point(路径)（如 P=Point(Segment(A,B))，把动点放在线段/路径上）——Point(路径,参数) 是固定点拖不动、SetValue(P,数值) 会把路径点改写成复数致构造断裂，两者都禁用。',
   '- ggb_query：查询画布数值/存在性，用于几何推理验证（{"names":"A,B,dAB","mode":"value|defined"}）。value 返回对象数值（距离/坐标/表达式值），defined 返回是否已定义。构造一批后必须用它核对。',
+  '- geo3d：3D 立体几何工具（three.js，本地渲染）。用于**着色多面体/相对面/三视图/相邻面/镜像(手性)矛盾**类题目（如"正方体六个面涂不同颜色，按三视图判断相对面"）。action="reach" 传 top/right/front 三颜色，返回能否由同一正方体旋转得到（含行列式，镜像时给出更正视角）——这是判断题图画没画错的关键；action="query" 查当前相对面/相邻/每面颜色；action="view" 转视角；action="solid" 设定某面颜色。**判断相对面**：三视图中从未同时出现的两色必相对；**判断题图是否镜像画错**：某 (顶,右,前) 环绕次序若为左手系（reach 返回不可达）则同一正方体转不出来。平面几何一律用 ggb_eval/ggb_query；只有立体/上色/三视图才用 geo3d。',
   '- student_calc：学生草稿纸（精确手算引擎）：化简/展开/代入（{"expr":"(x+1)(x+2)"}）→ 返回精确式（√5 保留 √5、√18→3√2、分母有理化、sin75°→(√6+√2)/4）。**凡是需要"算"的代数步骤都必须交给它**（展开、代入化简、根式化简、特殊角三角、合并同类项），不要脑内口算；它报"学生手算不可达"时改用定理/特殊角。',
   '- student_solve：学生草稿纸（方程求解）：（{"eqs":["x^2-3x+2=0"],"vars":["x"]}）→ 精确解（求根公式，带根号/分数的精确解）。解方程/方程组必须用它，禁止脑内暴力解。',
   '- scratch_paper：查看草稿档案（每次 student_calc/student_solve 自动存档为一步：输入→结果）。推导前先回看，避免重复/脑内重推。',
