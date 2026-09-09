@@ -1269,6 +1269,7 @@ function runGGBTool(name, argsStr) {
     return g3.run(argsStr);
   }
   var mode3d = (args && args.view) === '3d';
+  if (name === 'geo3d' || mode3d) { try { window.__used3D = 1; } catch (e) {} }
   if (mode3d) {
     showView('ggb3d');
     if (!ggbApi3d) {
@@ -2422,6 +2423,7 @@ async function runReAct(text) {
 
 var toolRound = 0;
   var queryNudges = 0;   // 无查询验证引导累计（最多 3 次）
+  var figureNudges = 0;  // 3D 立体题未出 geo3d 学生图 → 引导累计（最多 2 次）
   var calcNudges = 0;        // 没用草稿纸引导累计（最多 3 次）
   var generalizeNudges = 0;  // 泛化空转引导累计（最多 2 次）
   var reReadNudges = 0;      // 重复审题/复读自我否定引导累计（最多 2 次）
@@ -2566,6 +2568,17 @@ var toolRound = 0;
           conversation.push({ role:'assistant', content: '' });
           conversation.push({ role:'user', content:[{ type:'text', text:'你刚执行了 ' + res.toolCalls.length + ' 条 ggb_eval 但还没有查询验证。请立即用工具调用 ggb_query（{"names":"对象A,对象B,距离dXY","mode":"value"}）读出关键量真实数值，核对构造与结论；**凡是需要化简/计算/解方程的代数步骤，一律调用 student_calc 或 student_solve（学生草稿纸，精确手算结果）**，不要脑内口算。然后再决定继续构造或输出最终讲解正文。' }] });
           addSys('🔎 已推送验证引导（' + queryNudges + '/3）：请用 ggb_query 读数核对…');
+          toolRound++;
+          roundIndexMap = {};
+          continue;
+        }
+        // 【立体题未出 geo3d 学生图 → 拦截一次】学生在看的那张立体图必须是干净可认的（geo3d 画：填面/连边/上色/无轴），
+        // GGB3D 建的往往是测量骨架/无限面。若用了 3D 工具却没出一个 geo3d 图，推一条让它去画。
+        if (window.__used3D && !window.__geo3dFigure && figureNudges < 2) {
+          figureNudges++;
+          conversation.push({ role:'assistant', content: '' });
+          conversation.push({ role:'user', content:[{ type:'text', text:'这是一道立体几何题，学生要看的那张立体图必须是**干净、连成一体、可上色的**。你目前在 GeoGebra 3D 里建的多是测量骨架/无限面，不适合当成果图。请用 geo3d 画一张学生看的干净立体图：action="solid" kind="poly" 配 verts+faces（把题中各顶点坐标填进去、把面连成体），或 kind=四棱锥/棱柱等现成形状，再 action="shot" 把图发进会话。**图要连成体、有面、边全接**，不要只用几根线段。' }] });
+          addSys('🎨 已推送出图引导（' + figureNudges + '/2）：请用 geo3d 画一张干净立体的学生图');
           toolRound++;
           roundIndexMap = {};
           continue;

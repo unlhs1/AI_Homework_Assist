@@ -290,6 +290,7 @@
       wrap.appendChild(img);
       if (label) { var cap = document.createElement('div'); cap.className = 'fig-cap'; cap.style.fontSize = '12px'; cap.style.color = '#6b7280'; cap.style.marginTop = '4px'; cap.textContent = '🧊 ' + label; wrap.appendChild(cap); }
       cs.appendChild(wrap); if (typeof scrollBottom === 'function') scrollBottom();
+      try { if (typeof window !== 'undefined') window.__geo3dFigure = 1; } catch (e) {}
     } catch (e) {}
   }
   function shot() {
