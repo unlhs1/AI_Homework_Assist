@@ -67,6 +67,15 @@ if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
   T('T4 cube six-color ok', r6 && r6.ok === true && /顶=白/.test(r6.result), r6 && r6.result);
   T('T4b shot cube', (await doShot()) && await lastShot('04_cube_colors.png'));
 
+  // T7 peek 自查图：渲染当前画面回传给模型（不发进会话）——AI 看图修正细节用
+  const imgsBefore7 = await page.evaluate(() => document.querySelectorAll('#chat-scroll img.m-img').length);
+  const r8 = await call({ action: 'peek' });
+  const peekImg = await page.evaluate(() => window.__geo3dPeekImage || null);
+  T('T7a peek returns image', r8 && r8.ok === true && !!peekImg && /^data:image\/(jpeg|png)/.test(peekImg), r8 && r8.result);
+  const imgsAfter7 = await page.evaluate(() => document.querySelectorAll('#chat-scroll img.m-img').length);
+  T('T7b peek not posted to chat', imgsAfter7 === imgsBefore7, 'imgs ' + imgsBefore7 + '→' + imgsAfter7);
+  await page.evaluate(() => { window.__geo3dPeekImage = null; }); // 清理，避免影响后续用例
+
   // T5 清理
   const r7 = await call({ action: 'clear' });
   T('T5 clear ok', r7 && r7.ok === true, r7 && r7.result);

@@ -365,6 +365,29 @@
       try { if (typeof window !== 'undefined') window.__geo3dFigure = 1; } catch (e) {}
     } catch (e) {}
   }
+  // peek：把当前画面渲染成图回传给模型自查（不发进会话、学生看不到）——模型看图修细节后再 shot
+  function peek() {
+    if (!viewer || !viewer.renderer) return '当前没有已初始化的 3D 视图——请先用 action="solid" 构建立体，再 peek 自查';
+    renderViewer();
+    var src = null;
+    try { src = viewer.renderer.domElement; } catch (e) { src = null; }
+    if (!src || !src.width) return '3D 画布不可用，无法生成自查图——请直接用坐标数据核对，或改用 action="shot"';
+    var url = null;
+    try {
+      var k = Math.min(1, 440 / Math.max(src.width, src.height));
+      var c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(src.width * k));
+      c.height = Math.max(1, Math.round(src.height * k));
+      var cx = c.getContext('2d');
+      cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, c.width, c.height); // alpha 画布垫白底再压 JPEG
+      cx.drawImage(src, 0, 0, c.width, c.height);
+      url = c.toDataURL('image/jpeg', 0.85);
+    } catch (e) { url = null; }
+    if (!url) { try { url = src.toDataURL('image/png'); } catch (e2) { url = null; } }
+    if (!url) return '自查图导出失败（画布被拒）——请直接用坐标数据核对，或改用 action="shot"';
+    try { window.__geo3dPeekImage = url; } catch (e3) {}
+    return '🖼 已渲染当前立体图（自查通道）：图将随下一条消息回传给你，不会发进会话。请对照图检查构型/顶点字母/辅助线/构图角度，需要修正就 add/solid 改完再次 peek 复查，确认满意后 action="shot" 发给学生。';
+  }
   function shot() {
     // 截当前活动的 3D 视图：GeoGebra 3D canvas（上色后）优先，否则 three.js renderer
     var url = null;
@@ -405,7 +428,7 @@
     });
     var action = args.action || 'query';
     // 需要画面的动作：viewer 未初始化时主动初始化（容器隐藏也可渲染，保证 shot 可用）
-    if ((action === 'solid' || action === 'add' || action === 'clear' || action === 'shot' || action === 'shoot' || action === 'view' || action === 'orient') && !viewer && typeof document !== 'undefined') initViewer();
+    if ((action === 'solid' || action === 'add' || action === 'clear' || action === 'shot' || action === 'shoot' || action === 'peek' || action === 'view' || action === 'orient') && !viewer && typeof document !== 'undefined') initViewer();
     var out;
     if (action === 'solid') {
       // 支持常见可上色立体：kind = cube/prism/pyramid/tetrahedron/cylinder/cone/sphere
@@ -474,6 +497,8 @@
       out = '已构建可上色' + (KIND[kind] || kind) + (kind === 'cube' ? '（六面着色：顶=' + solidState.colors['+Y'] + '，右=' + solidState.colors['+X'] + '，前=' + solidState.colors['+Z'] + '）' : '（共' + nfaces + '面 / 曲面可上色，可用 action="shot" 生成图片发进会话）');
     } else if (action === 'shot') {
       out = shot();
+    } else if (action === 'peek') {
+      out = peek();
     } else if (action === 'view' || action === 'orient') {
       var r = reachForSolid(solidState, args.top, args.right, args.front);
       if (!r.ok) return { ok: false, result: r.error };
