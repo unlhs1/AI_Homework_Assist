@@ -280,12 +280,20 @@
     } catch (e) {}
   }
   function shot() {
-    if (!viewer || !viewer.renderer || !viewer.renderer.domElement) return '3D 视图未初始化（请在浏览器中先 action="solid" 构建立体再截图）';
-    renderViewer();
+    // 截当前活动的 3D 视图：GeoGebra 3D canvas（上色后）优先，否则 three.js renderer
     var url = null;
-    try { url = viewer.renderer.domElement.toDataURL('image/png'); } catch (e) { return '截图失败: ' + String(e.message || e); }
+    var g3dEl = (typeof document !== 'undefined') && document.getElementById('ggb3d-element');
+    if (g3dEl && g3dEl.style.display !== 'none') {
+      var cv = g3dEl.querySelector('canvas');
+      if (cv) { try { url = cv.toDataURL('image/png'); } catch (e) { url = null; } }
+    }
+    if (!url && viewer && viewer.renderer) {
+      renderViewer();
+      try { url = viewer.renderer.domElement.toDataURL('image/png'); } catch (e) { url = null; }
+    }
+    if (!url) return '无可用 3D 画面可截图（先在 geo3d 构建或切到 GeoGebra 3D 视图）';
     var k = solidState.kind || 'cube';
-    postFigure(url, (k === 'cube' ? '正方体' : k === 'prism' ? '三棱柱' : k === 'pyramid' ? '四棱锥' : k === 'tetrahedron' ? '四面体' : k === 'cylinder' ? '圆柱' : k === 'cone' ? '圆锥' : k === 'sphere' ? '球' : k) + '（已生成图）');
+    postFigure(url, (k === 'cube' ? '正方体' : k === 'prism' ? '三棱柱' : k === 'pyramid' ? '四棱锥' : k === 'tetrahedron' ? '四面体' : k === 'cylinder' ? '圆柱' : k === 'cone' ? '圆锥' : k === 'sphere' ? '球' : k === 'poly' ? '自定义多面体' : k) + '（已生成图）');
     return '已生成立体图并发送到会话（图片传输通道）';
   }
   function orientTo(keys) { // keys=[top,right,front] face keys（非镜像）
