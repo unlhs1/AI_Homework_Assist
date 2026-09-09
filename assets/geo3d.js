@@ -130,9 +130,10 @@
     var el = document.getElementById('geo3d-element');
     if (!el) return viewer;
     var scene = new THREE.Scene();
+    scene.background = new THREE.Color('#ffffff'); // 白底导出：任何查看器里都是教材纸面感
     var W = el.clientWidth || 460, H = el.clientHeight || 420;
     var camera = new THREE.PerspectiveCamera(42, W / H, 0.1, 100);
-    camera.position.set(3.4, 3.1, 4.4); camera.lookAt(0, 0, 0);
+    camera.position.set(3.2, 3.8, 4.3); camera.lookAt(0, 0, 0);
     var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(W, H); renderer.setPixelRatio(global.devicePixelRatio || 1);
     el.appendChild(renderer.domElement);
@@ -155,20 +156,40 @@
     });
     cvEl.addEventListener('pointerup', function () { dragging = false; });
     cvEl.addEventListener('wheel', function (e) { e.preventDefault(); viewer.camDist = Math.max(3, Math.min(10, viewer.camDist + e.deltaY * 0.004)); applyCam(); renderViewer(); }, { passive: false });
-    function applyCam() { camera.position.copy(new THREE.Vector3(3.4, 3.1, 4.4).normalize().multiplyScalar(viewer.camDist)); camera.lookAt(0, 0, 0); }
+    function applyCam() { camera.position.copy(new THREE.Vector3(3.2, 3.8, 4.3).normalize().multiplyScalar(viewer.camDist)); camera.lookAt(0, 0, 0); }
     return viewer;
   }
   function renderViewer() { if (viewer) { viewer.renderer.render(viewer.scene, viewer.camera); } }
 
-  function makeLabelMat(text) {
+  function makeLabelMat(text, onLight) {
     var cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
     var c = cv.getContext('2d'); c.clearRect(0, 0, 256, 128);
-    c.fillStyle = 'rgba(255,255,255,0)'; c.font = 'bold 66px "Microsoft YaHei",sans-serif';
+    c.fillStyle = 'rgba(255,255,255,0)';
     c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.strokeStyle = 'rgba(30,45,60,0.9)'; c.lineWidth = 8; c.lineJoin = 'round'; c.strokeText(text, 128, 64);
-    c.fillStyle = 'rgba(255,255,255,0.92)'; c.fillText(text, 128, 64);
-    return new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, side: THREE.DoubleSide, depthWrite: false });
+    if (onLight) {
+      // 教材风：浅底 → 深色斜体衬线字（顶点字母 A/B/P 那种试卷印刷体）+ 白描边
+      c.font = 'italic 64px "Times New Roman","Cambria Math",Georgia,serif';
+      c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 7; c.lineJoin = 'round'; c.strokeText(text, 128, 64);
+      c.fillStyle = '#16202b'; c.fillText(text, 128, 64);
+    } else {
+      // 彩色深底 → 白字+深描边（正方体六色面标签）
+      c.font = 'bold 66px "Microsoft YaHei",sans-serif';
+      c.strokeStyle = 'rgba(30,45,60,0.9)'; c.lineWidth = 8; c.lineJoin = 'round'; c.strokeText(text, 128, 64);
+      c.fillStyle = 'rgba(255,255,255,0.92)'; c.fillText(text, 128, 64);
+    }
+    return new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, side: THREE.FrontSide, depthWrite: false });
   }
+  // ---------- 教材素净风（试卷/教科书插图风）：默认近白面+深棱线；上色=可选 ----------
+  var FACE_EDU = '#f7f9fb';
+  var PALETTE_EDU = ['#aecbe8', '#f2d8a7', '#b5dcc3', '#efc3cf', '#c9c2e8', '#a9d6d0', '#e8c8a4', '#c3cbdc'];
+  function lumHex(col) {
+    var h = (typeof col === 'string' && col.charAt(0) === '#') ? col : hexOf(col);
+    if (typeof h !== 'string' || h.charAt(0) !== '#' || h.length < 7) return 0.5;
+    var n = parseInt(h.slice(1, 7), 16);
+    if (isNaN(n)) return 0.5;
+    return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  }
+  function faceLabelOnLight(col) { return lumHex(col) > 0.62; }
 
   var FACE_KEYS = ['+X', '-X', '+Y', '-Y', '+Z', '-Z'];
   var PALETTE = ['#e05a4e', '#4e9be0', '#4ec06a', '#f0c341', '#9a6ee0', '#e08a4e', '#4ed6c0', '#c04e9b', '#8a8f98', '#4e6a9b'];
@@ -212,7 +233,7 @@
     if (kind === 'cube') {
       var colors = solidState.colors || REF_COLORS, HALF = 1.0;
       var mats = FACE_KEYS.map(function (k) {
-        return new THREE.MeshPhongMaterial({ color: hexOf(colors[k] || '#999'), transparent: true, opacity: 0.96, side: THREE.DoubleSide });
+        return new THREE.MeshBasicMaterial({ color: hexOf(colors[k] || '#999'), transparent: true, opacity: 0.96, side: THREE.DoubleSide });
       });
       var box = new THREE.Mesh(new THREE.BoxGeometry(2 * HALF, 2 * HALF, 2 * HALF), mats);
       viewer.group.add(box);
@@ -223,27 +244,42 @@
         lp.lookAt(new THREE.Vector3(n[0] * (HALF + 1.2), n[1] * (HALF + 1.2), n[2] * (HALF + 1.2))); viewer.group.add(lp);
       });
     } else if (kind === 'poly' && solidState.verts && solidState.faces) {
-      // 任意多面体：verts=[[x,y,z]..], faces=[[vi,vi,vi]..]（每面一个 color，可 shot 成图）
+      // 任意多面体：verts=[[x,y,z]..]；faces=[{idx:[vi..], name, color}..]（run() 已归一化），可 shot 成图
       var V = solidState.verts;
       solidState.faces.forEach(function (f, fi) {
-        var verts = f.map(function (vi) { return V[vi]; });
-        var col = (solidState.palette && solidState.palette[fi]) || PALETTE[fi % PALETTE.length];
+        var verts = f.idx.map(function (vi) { return V[vi]; });
+        var col = f.color || (solidState.palette && solidState.palette[fi]) || FACE_EDU;
+        if (typeof col === 'string' && col.charAt(0) !== '#') col = hexOf(col);
         var pos = []; triList(verts).forEach(function (t) { pos.push(t[0][0], t[0][1], t[0][2], t[1][0], t[1][1], t[1][2], t[2][0], t[2][1], t[2][2]); });
         var geom = new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geom.computeVertexNormals();
-        viewer.group.add(new THREE.Mesh(geom, new THREE.MeshPhongMaterial({ color: col, transparent: true, opacity: 0.94, side: THREE.DoubleSide })));
+        viewer.group.add(new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.94, side: THREE.DoubleSide })));
         viewer.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geom), new THREE.LineBasicMaterial({ color: 0x1c2b36 })));
+        if (!f.name) return; // 教材风：无面名的面不打标签（避免背面透出镜像水印），顶点字母标签保留
         var ctr = faceCentroid(verts), nrm = faceNormal(verts);
-        var lp = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.5), makeLabelMat('面' + (fi + 1)));
+        var lp = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.5), makeLabelMat(f.name, faceLabelOnLight(col)));
         lp.position.set(ctr[0] + nrm[0] * 0.06, ctr[1] + nrm[1] * 0.06, ctr[2] + nrm[2] * 0.06);
         lp.lookAt(new THREE.Vector3(ctr[0] + nrm[0], ctr[1] + nrm[1], ctr[2] + nrm[2])); viewer.group.add(lp);
       });
+      // 顶点字母标签（具名点模式）：贴在每个顶点沿「质心→顶点」方向外偏处，图与题干字母一一对应
+      if (solidState.namedLabels && solidState.namedLabels.length) {
+        var C0 = [0, 0, 0]; V.forEach(function (p) { C0[0] += p[0]; C0[1] += p[1]; C0[2] += p[2]; });
+        C0 = [C0[0] / V.length, C0[1] / V.length, C0[2] / V.length];
+        solidState.namedLabels.forEach(function (it) {
+          var p = V[it.i]; if (!p) return;
+          var d = [p[0] - C0[0], p[1] - C0[1], p[2] - C0[2]];
+          var L = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1, off = 0.22;
+          var vp = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.55), makeLabelMat(it.n, true));
+          vp.position.set(p[0] + d[0] / L * off, p[1] + d[1] / L * off, p[2] + d[2] / L * off);
+          viewer.group.add(vp);
+        });
+      }
     } else if (kind === 'cylinder' || kind === 'cone' || kind === 'sphere') {
       var mg = kind === 'sphere' ? new THREE.SphereGeometry(1.15, 28, 20) : (kind === 'cone' ? new THREE.ConeGeometry(1, 2.4, 32, 1, false) : new THREE.CylinderGeometry(1, 1, 2.4, 32, 1, false));
       if (kind === 'sphere') {
-        viewer.group.add(new THREE.Mesh(mg, new THREE.MeshPhongMaterial({ color: hexOf('蓝'), transparent: true, opacity: 0.88, side: THREE.DoubleSide })));
+        viewer.group.add(new THREE.Mesh(mg, new THREE.MeshBasicMaterial({ color: PALETTE_EDU[0], transparent: true, opacity: 0.88, side: THREE.DoubleSide })));
         viewer.group.add(new THREE.Mesh(new THREE.SphereGeometry(1.15, 16, 12), new THREE.MeshBasicMaterial({ wireframe: true, color: 0x1c2b36 })));
       } else {
-        var mats2 = (mg.groups && mg.groups.length) ? mg.groups.map(function (g, gi) { return new THREE.MeshPhongMaterial({ color: PALETTE[gi % PALETTE.length], transparent: true, opacity: 0.94, side: THREE.DoubleSide }); }) : [new THREE.MeshPhongMaterial({ color: PALETTE[0], transparent: true, opacity: 0.94, side: THREE.DoubleSide })];
+        var mats2 = (mg.groups && mg.groups.length) ? mg.groups.map(function (g, gi) { return new THREE.MeshBasicMaterial({ color: FACE_EDU, transparent: true, opacity: 0.94, side: THREE.DoubleSide }); }) : [new THREE.MeshBasicMaterial({ color: FACE_EDU, transparent: true, opacity: 0.94, side: THREE.DoubleSide })];
         viewer.group.add(new THREE.Mesh(mg, mats2));
         viewer.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(mg), new THREE.LineBasicMaterial({ color: 0x1c2b36 })));
       }
@@ -253,20 +289,56 @@
         solidState.kind = 'cube'; solidState.colors = solidState.colors || REF_COLORS; buildSolidView(); return;
       }
       faces.forEach(function (f, fi) {
-        var col = (solidState.palette && solidState.palette[fi]) || PALETTE[fi % PALETTE.length];
+        var col = (solidState.palette && solidState.palette[fi]) || FACE_EDU;
         var pos = []; triList(f.verts).forEach(function (t) { pos.push(t[0][0], t[0][1], t[0][2], t[1][0], t[1][1], t[1][2], t[2][0], t[2][1], t[2][2]); });
         var geom = new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geom.computeVertexNormals();
-        var mesh = new THREE.Mesh(geom, new THREE.MeshPhongMaterial({ color: col, transparent: true, opacity: 0.94, side: THREE.DoubleSide }));
+        var mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.94, side: THREE.DoubleSide }));
         mesh.userData.faceName = f.name; viewer.group.add(mesh);
         viewer.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geom), new THREE.LineBasicMaterial({ color: 0x1c2b36 })));
         var ctr = faceCentroid(f.verts), nrm = faceNormal(f.verts);
-        var lp = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.5), makeLabelMat(f.name));
+        var lp = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.5), makeLabelMat(f.name, faceLabelOnLight(col)));
         lp.position.set(ctr[0] + nrm[0] * 0.06, ctr[1] + nrm[1] * 0.06, ctr[2] + nrm[2] * 0.06);
         lp.lookAt(new THREE.Vector3(ctr[0] + nrm[0], ctr[1] + nrm[1], ctr[2] + nrm[2])); viewer.group.add(lp);
       });
     }
     if (currentQuat) viewer.group.quaternion.copy(currentQuat);
+    renderOverlay();
     frameSolid();
+  }
+  // ---------- 辅助元素 overlay（叠画在实体上：点/线段/截面/文字标注） ----------
+  var overlay = [];
+  function renderOverlay() {
+    if (!viewer) return;
+    overlay.forEach(function (o) {
+      if (o.kind === 'point') {
+        var sp = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), new THREE.MeshBasicMaterial({ color: o.color || '#c0392b', depthTest: false }));
+        sp.renderOrder = 10; // 辅助元素透体可见（高线/体内线段不被面遮挡）
+        sp.position.set(o.p[0], o.p[1], o.p[2]); viewer.group.add(sp);
+        if (o.label) { var lp = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), makeLabelMat(o.label, true)); lp.material.depthTest = false; lp.renderOrder = 10; lp.position.set(o.p[0], o.p[1] + 0.16, o.p[2]); viewer.group.add(lp); }
+      } else if (o.kind === 'segment') {
+        var g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(o.from[0], o.from[1], o.from[2]), new THREE.Vector3(o.to[0], o.to[1], o.to[2])]);
+        var mat = o.dashed ? new THREE.LineDashedMaterial({ color: o.color || '#8a8f98', dashSize: 0.09, gapSize: 0.06, depthTest: false }) : new THREE.LineBasicMaterial({ color: o.color || '#c0392b', depthTest: false });
+        var ln = new THREE.Line(g, mat); if (o.dashed) ln.computeLineDistances();
+        ln.renderOrder = 10;
+        viewer.group.add(ln);
+        if (o.label) {
+          var lp2 = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), makeLabelMat(o.label, true));
+          lp2.material.depthTest = false; lp2.renderOrder = 10;
+          lp2.position.set((o.from[0] + o.to[0]) / 2, (o.from[1] + o.to[1]) / 2 + 0.1, (o.from[2] + o.to[2]) / 2); viewer.group.add(lp2);
+        }
+      } else if (o.kind === 'polygon') {
+        var pos = []; triList(o.verts).forEach(function (t) { pos.push(t[0][0], t[0][1], t[0][2], t[1][0], t[1][1], t[1][2], t[2][0], t[2][1], t[2][2]); });
+        var geom = new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geom.computeVertexNormals();
+        var pgm = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: o.color || '#5a8fd0', transparent: true, opacity: 0.42, side: THREE.DoubleSide, depthTest: false }));
+        pgm.renderOrder = 9; viewer.group.add(pgm);
+        var pgl = new THREE.LineSegments(new THREE.EdgesGeometry(geom), new THREE.LineBasicMaterial({ color: 0x2b4a6b, depthTest: false }));
+        pgl.renderOrder = 10; viewer.group.add(pgl);
+      } else if (o.kind === 'label') {
+        var lp3 = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.44), makeLabelMat(o.text, true));
+        lp3.material.depthTest = false; lp3.renderOrder = 10;
+        lp3.position.set(o.p[0], o.p[1], o.p[2]); viewer.group.add(lp3);
+      }
+    });
   }
   // 自动取景：按立体包围盒中心+尺寸设置相机，画面完整居中不裁切
   function frameSolid() {
@@ -276,7 +348,7 @@
     var c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
     var maxS = Math.max(s.x, s.y, s.z) || 2.2;
     viewer.camDist = Math.max(3.4, maxS * 2.1);
-    var dir = new THREE.Vector3(3.4, 3.1, 4.4).normalize();
+    var dir = new THREE.Vector3(3.2, 3.8, 4.3).normalize();
     viewer.camera.position.copy(c.clone().add(dir.clone().multiplyScalar(viewer.camDist)));
     viewer.camera.lookAt(c);
     renderViewer();
@@ -323,23 +395,53 @@
   // ---------- 3. run() —— geo3d 工具入口 ----------
   function run(argsStr) {
     var args; try { args = JSON.parse(argsStr || '{}'); } catch (e) { return { ok: false, result: 'geo3d 参数 JSON 解析失败: ' + e.message }; }
+    // LLM 有时会把数组/对象参数双重序列化成字符串（如 verts:"[{...}]"），这里统一兜底还原
+    Object.keys(args).forEach(function (k) {
+      var s = args[k];
+      if (typeof s === 'string') {
+        var t = s.trim();
+        if (t.charAt(0) === '[' || t.charAt(0) === '{') { try { args[k] = JSON.parse(t); } catch (e2) {} }
+      }
+    });
     var action = args.action || 'query';
+    // 需要画面的动作：viewer 未初始化时主动初始化（容器隐藏也可渲染，保证 shot 可用）
+    if ((action === 'solid' || action === 'add' || action === 'clear' || action === 'shot' || action === 'shoot' || action === 'view' || action === 'orient') && !viewer && typeof document !== 'undefined') initViewer();
     var out;
     if (action === 'solid') {
       // 支持常见可上色立体：kind = cube/prism/pyramid/tetrahedron/cylinder/cone/sphere
       var kind = args.kind || solidState.kind || 'cube';
       solidState.kind = kind;
+      overlay = []; // 换新实体时旧辅助元素一并清掉（属于旧体的辅助对新体无意义）
       if (args.palette) solidState.palette = args.palette;
+      if (kind === 'poly' && !(args.verts && args.faces)) {
+        return { ok: false, result: 'kind=poly 需要同时提供 verts 和 faces。推荐具名点写法：verts=[{"n":"A","p":[0,0,0]},..]、faces=[{"v":["A","B","C","D"],"name":"底面","color":"#cfe3ff"},..]（name/color 可省略），或简写 faces=[["A","B","C","D"],..]' };
+      }
       if (kind === 'poly' && args.verts && args.faces) {
-        // 兼容两种写法：① verts=[[x,y,z]..] + faces=[[vi..]..]（索引）；② verts=[{n,p:[x,y,z]}..] + faces=[[名称..]..]（GeoGebra 式具名点）
+        // 兼容写法：① verts=[[x,y,z]..] + faces=[[vi..]..]（索引）；② verts=[{n,p:[x,y,z]}..]（具名点）+ faces=[["A","B",..]..] 或 faces=[{v:[..],name,color}..]（带面名/单面色）
         var v = args.verts, f = args.faces, nameIdx = null, verts = [];
-        if (v.length && typeof v[0] === 'object' && !Array.isArray(v[0]) && v[0].p) {
+        if (!Array.isArray(v) || !Array.isArray(f) || !v.length || !f.length) {
+          return { ok: false, result: 'poly 参数无效：verts/faces 必须是非空数组。具名点 verts=[{"n":"A","p":[0,0,0]},..]，faces=[["A","B","C","D"],..] 或 [{"v":["A","B","C","D"],"name":"底面"},..]' };
+        }
+        if (v[0] && typeof v[0] === 'object' && !Array.isArray(v[0]) && v[0].p) {
           nameIdx = {};
           v.forEach(function (item, i) { verts.push(item.p.slice(0, 3)); nameIdx[item.n] = i; });
-        } else { verts = v.map(function (p) { return p.slice(0, 3); }); }
+          solidState.namedLabels = v.map(function (item, i) { return { n: String(item.n), i: i }; });
+        } else {
+          verts = v.map(function (p) { return Array.isArray(p) ? p.slice(0, 3) : null; });
+          if (verts.indexOf(null) >= 0) return { ok: false, result: 'poly 参数无效：verts 每项应为 [x,y,z] 数组或 {"n":"A","p":[x,y,z]} 具名点对象' };
+          solidState.namedLabels = null;
+        }
         var faces = f.map(function (face) {
-          return face.map(function (vi) { return (typeof vi === 'string' && nameIdx) ? nameIdx[vi] : vi; });
+          var arr, nm = null, cl = null;
+          if (face && typeof face === 'object' && !Array.isArray(face) && face.v) {
+            arr = face.v; nm = face.name || null; cl = face.color || null;
+          } else { arr = face; }
+          return { idx: arr.map(function (vi) { return (typeof vi === 'string' && nameIdx && nameIdx[vi] != null) ? nameIdx[vi] : vi; }), name: nm, color: cl };
         });
+        // 校验顶点引用有效性，防止 undefined 坐标让渲染崩溃
+        var bad = [];
+        faces.forEach(function (fc, fi) { fc.idx.forEach(function (vi) { if (typeof vi !== 'number' || vi < 0 || vi >= verts.length) bad.push('第' + (fi + 1) + '面的顶点「' + vi + '」无效'); }); });
+        if (bad.length) return { ok: false, result: 'poly 面定义有误：' + bad.slice(0, 3).join('；') + '。可用顶点：' + (nameIdx ? Object.keys(nameIdx).join('、') : ('索引 0..' + (verts.length - 1))) };
         solidState.verts = verts; solidState.faces = faces;
         solidState.colors = null; solidState.labelToKey = null;
       } else if (kind === 'cube') {
@@ -400,12 +502,33 @@
           + '；相对面（唯一）：' + opp
           + '；每面颜色：' + FACE_KEYS.map(function (k) { return k.replace('+', '').replace('-', '-') + ':' + cNow[k]; }).join(' ');
       }
+    } else if (action === 'add') {
+      var c2 = (typeof args.color === 'string' && args.color.charAt(0) !== '#') ? hexOf(args.color) : args.color;
+      if (args.kind === 'point' && Array.isArray(args.p)) {
+        overlay.push({ kind: 'point', p: args.p, label: args.label, color: c2 });
+        out = '已添加辅助点' + (args.label ? ' ' + args.label : '') + '（action="shot" 可出图）';
+      } else if (args.kind === 'segment' && Array.isArray(args.from) && Array.isArray(args.to)) {
+        overlay.push({ kind: 'segment', from: args.from, to: args.to, label: args.label, color: c2, dashed: !!args.dashed });
+        out = '已添加' + (args.dashed ? '虚线段' : '线段') + (args.label ? ' ' + args.label : '') + '（用于高线/辅助线/不可见棱）';
+      } else if (args.kind === 'polygon' && Array.isArray(args.verts) && args.verts.length >= 3) {
+        overlay.push({ kind: 'polygon', verts: args.verts, color: c2 });
+        out = '已添加多边形辅助面/截面（' + args.verts.length + ' 顶点）';
+      } else if (args.kind === 'label' && Array.isArray(args.p) && args.text) {
+        overlay.push({ kind: 'label', p: args.p, text: String(args.text), color: c2 });
+        out = '已添加文字标注「' + args.text + '」';
+      } else {
+        return { ok: false, result: 'add 参数无效：kind=point（p:[x,y,z], label）/ segment（from:[x,y,z], to:[x,y,z], dashed:true 画虚线, label, color）/ polygon（verts:[[x,y,z]..] 至少3点, color）/ label（p:[x,y,z], text）' };
+      }
+      if (viewer) buildSolidView();
+    } else if (action === 'clear') {
+      overlay = []; if (viewer) buildSolidView();
+      out = '已清除全部辅助元素（实体保留）';
     } else if (action === 'reset') {
-      solidState.kind = 'cube'; solidState.colors = null; solidState.labelToKey = null; solidState.palette = null; currentQuat = null;
+      solidState.kind = 'cube'; solidState.colors = null; solidState.labelToKey = null; solidState.palette = null; currentQuat = null; overlay = []; solidState.namedLabels = null; solidState.verts = null; solidState.faces = null;
       if (viewer) { buildSolidView(); }
       out = '已重置为基准正方体（顶=白，右=绿，前=黑）与基准朝向';
     } else {
-      return { ok: false, result: '未知 geo3d action: ' + action + '（可选 solid / shoot / shot / view / reach / query / reset）' };
+      return { ok: false, result: '未知 geo3d action: ' + action + '（可选 solid / shot / view / reach / query / add / clear / reset）' };
     }
     return { ok: true, result: '🧊 Geo3D · ' + out };
   }
