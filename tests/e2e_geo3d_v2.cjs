@@ -42,16 +42,16 @@ if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
   const T = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d ? '  | ' + String(d).slice(0, 80) : '')); };
 
   // T1 bug 现场：双重序列化的 verts/faces（第17题四棱锥，教材素净风）
-  const v17 = [{ n: 'A', p: [0, 0, 0] }, { n: 'B', p: [1.5, 0.866, 0] }, { n: 'C', p: [2, 0, 0] }, { n: 'D', p: [1.5, -0.866, 0] }, { n: 'P', p: [0, 0, 2] }];
+  const v17 = [{ n: 'A', p: [0, 0, 0] }, { n: 'B', p: [1.5, 0, 0.866] }, { n: 'C', p: [2, 0, 0] }, { n: 'D', p: [1.5, 0, -0.866] }, { n: 'P', p: [0, 2, 0] }];
   const f17 = [['A', 'B', 'C', 'D'], ['P', 'A', 'B'], ['P', 'B', 'C'], ['P', 'C', 'D'], ['P', 'D', 'A']];
   const r1 = await call({ action: 'solid', kind: 'poly', verts: JSON.stringify(v17), faces: JSON.stringify(f17) });
   T('T1 double-stringified poly ok', r1 && r1.ok === true, r1 && r1.result);
   T('T1b shot', (await doShot()) && await lastShot('01_poly_textbook.png'));
 
   // T2 辅助元素：虚线棱 PD + 实线高 PO + 点标注
-  const r2 = await call({ action: 'add', kind: 'segment', from: JSON.stringify([1.5, -0.866, 0]), to: JSON.stringify([0, 0, 2]), dashed: true, label: 'PD' });
+  const r2 = await call({ action: 'add', kind: 'segment', from: JSON.stringify([1.5, 0, -0.866]), to: JSON.stringify([0, 2, 0]), dashed: true, label: 'PD' });
   T('T2a add dashed PD', r2 && r2.ok === true, r2 && r2.result);
-  const r3 = await call({ action: 'add', kind: 'segment', from: JSON.stringify([0, 0, 0]), to: JSON.stringify([0, 0, 2]), label: 'PA' });
+  const r3 = await call({ action: 'add', kind: 'segment', from: JSON.stringify([0, 0, 0]), to: JSON.stringify([0, 2, 0]), label: 'PA' });
   T('T2b add segment PA', r3 && r3.ok === true, r3 && r3.result);
   const r4 = await call({ action: 'add', kind: 'point', p: JSON.stringify([1.5, 0, 0]), label: 'H' });
   T('T2c add point H', r4 && r4.ok === true, r4 && r4.result);

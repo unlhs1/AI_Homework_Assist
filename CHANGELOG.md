@@ -68,3 +68,22 @@ GeoGebra web3d-0.js 在 demo 异步初始化中被快节奏点击+Escape 打断�
 
 - 三绿：ui_smoke 8/8 + smoke_geo3d 12/12 + e2e_geo3d_v2 16/16
 - 视觉四图人审过：素色 poly（字母完整/留白舒适）、上色 poly（五面名全分离）、六色 cube（外部视角/半透明透视/居中完整）、辅助元素图
+
+## 2026-09-09 · geo3d 自由轨道视角 + 建图纪律（晚）
+
+### 交互重做（geo3d.js）
+
+- **自由轨道相机**（主人拍板"自由视角旋转>锚定旋转"）：orbit{theta,phi,dist,target} 球面坐标驱动相机，**体不动、相机绕体中心转**——左键拖=轨道旋转、滚轮=缩放（2..20）、**中键拖=平移镜头**（反向移动 target）。旧 trackball（premultiply 转体）的病根：旋转绕 group.position（=-c）而体中心在 world 原点，两者差 -c 向量 → "旋转还绕 A 点"；orbit 下问题不存在
+- orientTo（view 动作）后调 frameSolid 重取景：新姿态下中心归零+投影跨度重算，防 orient 后偏心
+- applyOrbit 必须模块级（frameSolid/orientTo/initViewer 共用；困在 initViewer 作用域 → ReferenceError）
+
+### 建图纪律（ai/index.html 提示词）
+
+- **坐标约定：y 轴向上**——底面放 y=0 水平面、高沿 +y；题干 z 轴向上时写 verts 把竖直分量放 y 位，否则立体图躺倒（e2e 用例 verts 已同步 y-up，塔尖 P 朝上验收过）
+- **强制辅助元素**：solid 只建几何体≠画完题——题干辅助点/线段/虚线/截面/坐标轴（建系题三条从原点出发的 segment+label x/y/z）必须逐一 add 再 peek/shot；只发裸几何体=未完成作答
+- `<script src="../assets/geo3d.js?v=20260909b">` 版本参数破缓存（file:// 与 http 都强制取新）
+
+### 验收
+
+- 三绿：e2e 16/16 + ui_smoke 8/8 + smoke 12/12
+- 四图人审过：y-up 塔尖朝上底面在下、虚线 PD/红色高线 PA/辅助点 H 清晰不喧宾夺主、cube 六色无回归

@@ -125,6 +125,13 @@
   }
   function textColor(label) { return (label === '白' || label === '黄') ? '#333' : '#fff'; }
 
+  // 自由轨道相机：按 theta/phi/dist/target 把相机放到球面位置并看向目标（模块级，frameSolid/orientTo 共用）
+  function applyOrbit() {
+    if (!viewer || !viewer.orbit) return;
+    var o = viewer.orbit, sp = Math.sin(o.phi);
+    viewer.camera.position.set(o.target.x + o.dist * sp * Math.sin(o.theta), o.target.y + o.dist * Math.cos(o.phi), o.target.z + o.dist * sp * Math.cos(o.theta));
+    viewer.camera.lookAt(o.target.x, o.target.y, o.target.z);
+  }
   function initViewer() {
     if (viewer || !global.THREE) return viewer;
     var el = document.getElementById('geo3d-element');
@@ -141,22 +148,34 @@
     var dl = new THREE.DirectionalLight(0xffffff, 0.7); dl.position.set(3, 4, 5); scene.add(dl);
     var dl2 = new THREE.DirectionalLight(0xffffff, 0.35); dl2.position.set(-4, -2, -3); scene.add(dl2);
     var group = new THREE.Group(); scene.add(group);
-    var camDist = 5.9;
-    viewer = { scene, camera, renderer, group, el, camDist };
-    // 拖动旋转 + 滚轮缩放
-    var dragging = false, lx = 0, ly = 0;
+    var orbit = { theta: Math.atan2(3.2, 4.3), phi: Math.acos(3.8 / Math.sqrt(3.2 * 3.2 + 3.8 * 3.8 + 4.3 * 4.3)), dist: 5.9, target: new THREE.Vector3(0, 0, 0) };
+    viewer = { scene, camera, renderer, group, el, orbit };
+    applyOrbit();
+    // 左键拖=轨道旋转（相机绕目标点球面转动，体不动）、滚轮=缩放、中键拖=平移镜头
+    var dragging = false, lx = 0, ly = 0, panning = false, px = 0, py = 0;
     var cvEl = renderer.domElement;
-    cvEl.addEventListener('pointerdown', function (e) { dragging = true; lx = e.clientX; ly = e.clientY; cvEl.setPointerCapture(e.pointerId); });
+    cvEl.addEventListener('mousedown', function (e) { if (e.button === 1) e.preventDefault(); }); // 防中键自动滚动
+    cvEl.addEventListener('pointerdown', function (e) {
+      if (e.button === 1) { panning = true; px = e.clientX; py = e.clientY; e.preventDefault(); return; }
+      dragging = true; lx = e.clientX; ly = e.clientY; cvEl.setPointerCapture(e.pointerId);
+    });
     cvEl.addEventListener('pointermove', function (e) {
+      if (panning) { // 平移镜头：反向移动轨道目标点（画面内容随手势走）
+        var k2 = viewer.orbit.dist / (cvEl.clientHeight || 420);
+        var dirP = new THREE.Vector3().subVectors(viewer.orbit.target, viewer.camera.position).normalize();
+        var cR = new THREE.Vector3().crossVectors(dirP, new THREE.Vector3(0, 1, 0)).normalize();
+        var cU = new THREE.Vector3().crossVectors(cR, dirP).normalize();
+        viewer.orbit.target.addScaledVector(cR, -(e.clientX - px) * k2).addScaledVector(cU, (e.clientY - py) * k2);
+        px = e.clientX; py = e.clientY; applyOrbit(); renderViewer(); return;
+      }
       if (!dragging) return;
       var dx = (e.clientX - lx) * 0.006, dy = (e.clientY - ly) * 0.006; lx = e.clientX; ly = e.clientY;
-      var qy = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dx);
-      var qx = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dy);
-      group.quaternion.premultiply(qy).premultiply(qx); renderViewer();
+      viewer.orbit.theta += dx;
+      viewer.orbit.phi = Math.max(0.08, Math.min(Math.PI - 0.08, viewer.orbit.phi - dy));
+      applyOrbit(); renderViewer();
     });
-    cvEl.addEventListener('pointerup', function () { dragging = false; });
-    cvEl.addEventListener('wheel', function (e) { e.preventDefault(); viewer.camDist = Math.max(3, Math.min(10, viewer.camDist + e.deltaY * 0.004)); applyCam(); renderViewer(); }, { passive: false });
-    function applyCam() { camera.position.copy(new THREE.Vector3(3.2, 3.8, 4.3).normalize().multiplyScalar(viewer.camDist)); camera.lookAt(0, 0, 0); }
+    cvEl.addEventListener('pointerup', function () { dragging = false; panning = false; });
+    cvEl.addEventListener('wheel', function (e) { e.preventDefault(); viewer.orbit.dist = Math.max(2, Math.min(20, viewer.orbit.dist + e.deltaY * 0.004)); applyOrbit(); renderViewer(); }, { passive: false });
     return viewer;
   }
   function renderViewer() {
@@ -379,9 +398,9 @@
       hw = Math.max(hw, Math.abs(pk.dot(camR))); hh = Math.max(hh, Math.abs(pk.dot(camU)));
     }
     var t2 = Math.tan(42 * Math.PI / 360), asp = viewer.camera.aspect || 1;
-    viewer.camDist = Math.max(3.4, Math.max(hw / (t2 * asp), hh / t2) * 1.35); // 1.35 → 本体最长边占比 ≤74%，四周留白舒适
-    viewer.camera.position.copy(dir.clone().multiplyScalar(viewer.camDist));
-    viewer.camera.lookAt(0, 0, 0);
+    viewer.orbit.dist = Math.max(2, Math.max(hw / (t2 * asp), hh / t2) * 1.35); // 1.35 → 本体最长边占比 ≤74%，四周留白舒适
+    viewer.orbit.target.set(0, 0, 0); // 体中心已平移到世界原点，轨道目标跟随
+    applyOrbit();
     renderViewer();
   }
   // 把当前 3D 画面渲染成 PNG，作为图片消息发进会话（图片传输通道）
@@ -447,7 +466,7 @@
       new THREE.Vector3(cols[1][0], cols[1][1], cols[1][2]),
       new THREE.Vector3(cols[2][0], cols[2][1], cols[2][2]));
     currentQuat = new THREE.Quaternion().setFromRotationMatrix(m);
-    if (viewer && viewer.group) { viewer.group.quaternion.copy(currentQuat); renderViewer(); }
+    if (viewer && viewer.group) { viewer.group.quaternion.copy(currentQuat); frameSolid(); } // frameSolid 重取景：新姿态下中心归零+投影跨度重算，防 orient 后偏心
   }
 
   // ---------- 3. run() —— geo3d 工具入口 ----------
