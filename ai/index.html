@@ -2478,6 +2478,7 @@ async function runReAct(text) {
 var toolRound = 0;
   var queryNudges = 0;   // 无查询验证引导累计（最多 3 次）
   var figureNudges = 0;  // 3D 立体题未出 geo3d 学生图 → 引导累计（最多 2 次）
+  var finalShotNudges = 0; // 收尾门禁：建模过但学生图从未发出 → 拦最终回答强制 shot（最多 1 次）
   var calcNudges = 0;        // 没用草稿纸引导累计（最多 3 次）
   var generalizeNudges = 0;  // 泛化空转引导累计（最多 2 次）
   var reReadNudges = 0;      // 重复审题/复读自我否定引导累计（最多 2 次）
@@ -2724,6 +2725,16 @@ var toolRound = 0;
           conversation.push({ role:'user', content:[{ type:'text', text:'「终审·降级放行」画布对象 ' + gateNames + ' 多次尝试仍无法定义。请检查它是否真的必要（可能只是辅助对象）；若确实无法在 GGB 中构造，请在最终讲解末尾的 JSON 附注块 figureNote 中明确注明「画布中 ' + gateNames + ' 构造失败：<原因>」，保证讲解与学生侧构建不依赖它，然后输出最终讲解正文。' }] });
           addSys('🚧 终审门禁：3 次无法修复 → 降级放行（要求 figureNote 注明失败项）');
         }
+        toolRound++;
+        roundIndexMap = {};
+        continue;
+      }
+      // ── geo3d 收尾门禁：立体题建了模但学生图从未发出 → 拦截最终回答一次，强制先 shot ──
+      if ((is3D || window.__used3D) && !window.__geo3dFigure && finalShotNudges < 1 && res.content) {
+        finalShotNudges++;
+        conversation.push({ role:'assistant', content: res.content });
+        conversation.push({ role:'user', content:[{ type:'text', text:'⚠️ 收尾检查：你已用 geo3d 构建立体模型，但**成品图从未发进会话**（peek 自查图学生看不到）。请立即调用 geo3d action="shot" 把当前立体图发给学生；若自查发现构型/顶点字母/辅助线有问题，先修正再 shot。发图后再输出最终讲解正文。' }] });
+        addSys('🚧 geo3d 收尾门禁：立体已建模但学生图未发出 → 拦截收尾，要求先 shot');
         toolRound++;
         roundIndexMap = {};
         continue;

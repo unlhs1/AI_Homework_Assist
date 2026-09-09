@@ -97,5 +97,6 @@ if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
   if (errors.length) { console.log('PAGE ERRORS:'); errors.slice(0, 8).forEach(e => console.log('  ' + e)); }
   else console.log('PAGE ERRORS: none');
   await browser.close();
-  process.exit(fail || errors.length ? 1 : 0);
+  const realErrors = errors.filter(e => !/status of 404/.test(e)); // favicon 404 等资源缺失不算测试失败
+  process.exit(fail || realErrors.length ? 1 : 0);
 })().catch(e => { console.error('E2E crash:', e.message); process.exit(3); });

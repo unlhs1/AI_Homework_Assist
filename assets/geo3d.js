@@ -559,6 +559,7 @@
     } else {
       return { ok: false, result: '未知 geo3d action: ' + action + '（可选 solid / shot / view / reach / query / add / clear / reset）' };
     }
+    if (typeof out === 'string' && out.charAt(0) === '⛔') return { ok: false, result: '🧊 Geo3D · ' + out }; // 门禁拦截按失败记（进未修复清单，逼模型响应）
     return { ok: true, result: '🧊 Geo3D · ' + out };
   }
 
